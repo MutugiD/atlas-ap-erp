@@ -12,7 +12,10 @@
     "paths": {
       "@atlas/contracts": ["packages/contracts/src/index.ts"],
       "@atlas/agents": ["packages/agents/src/index.ts"],
-      "@atlas/db": ["packages/db/src/index.ts"]
+      "@atlas/db": ["packages/db/src/index.ts"],
+      "@atlas/support-contracts": ["packages/support-contracts/src/index.ts"],
+      "@atlas/memory-engine": ["packages/memory-engine/src/index.ts"],
+      "@atlas/support-db": ["packages/support-db/src/index.ts"]
     }
   },
   "include": [
@@ -23,4 +26,3 @@
     "tests/**/*.ts"
   ]
 }
-
