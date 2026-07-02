@@ -95,5 +95,12 @@ describe("Support Agent V2 admin operator workflows", () => {
     expect(actions).toContain("api_key.created");
     expect(actions).toContain("api_key.revoked");
     expect(actions).toContain("dlq.replayed");
+
+    const exported = await app.inject({ method: "GET", url: "/api/admin/export/explorer?userId=ops-user&format=csv", headers: adminHeaders });
+    expect(exported.headers["content-type"]).toContain("text/csv");
+    expect(exported.body).toContain("slotKey");
+
+    const exportAudit = await app.inject({ method: "GET", url: "/api/admin/audit", headers: adminHeaders });
+    expect(exportAudit.json().events.map((event: { action: string }) => event.action)).toContain("admin.exported");
   });
 });

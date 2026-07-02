@@ -271,6 +271,19 @@ export function buildSupportApp(options: { store?: MemoryStore; queue?: IngestQu
     return { ok: await admin.revokeApiKey(request.org, id) };
   });
 
+  app.get("/api/admin/export/:view", async (request, reply) => {
+    requireAdmin(request.org);
+    const { view } = request.params as { view: string };
+    const query = request.query as { userId?: string; format?: "json" | "csv" };
+    const data = await adminExportData(view, query.userId ?? "demo-user", request.org.orgId, store, admin, request.org);
+    await admin.audit(request.org, "admin.exported", "admin_view", view, { format: query.format ?? "json" });
+    if (query.format === "csv") {
+      reply.type("text/csv");
+      return toCsv(data.rows);
+    }
+    return data;
+  });
+
   app.get("/admin", async (request, reply) => {
     requireAdmin(request.org);
     reply.type("text/html");
@@ -296,6 +309,46 @@ function requireAdmin(org: { role: string }) {
     error.statusCode = 403;
     throw error;
   }
+}
+
+async function adminExportData(
+  view: string,
+  userId: string,
+  orgId: string,
+  store: MemoryStore,
+  admin: AdminControlPlane,
+  org: { orgId: string; principalId: string; role: "agent" | "admin" | "service"; authType: "jwt" | "api_key" },
+) {
+  if (view === "explorer") {
+    const rich = await store.richTimeline({ orgId, userId });
+    return { view, rows: rich.facts };
+  }
+  if (view === "graph") {
+    const rich = await store.richTimeline({ orgId, userId });
+    const graph = buildSupersessionGraph(rich.facts);
+    return {
+      view,
+      rows: graph.lanes.flatMap((lane) =>
+        lane.nodes.map((node) => ({ slotKey: lane.slotKey, activeFactId: lane.activeFactId, ...node })),
+      ),
+    };
+  }
+  if (view === "pii") return { view, rows: admin.listPii(org, userId) };
+  if (view === "audit") return { view, rows: admin.listAudit(org) };
+  if (view === "dlq") return { view, rows: admin.listDlq(org) };
+  if (view === "api-keys") return { view, rows: admin.listApiKeys(org) };
+  const error = new Error("Unknown export view") as Error & { statusCode: number };
+  error.statusCode = 404;
+  throw error;
+}
+
+function toCsv(rows: Array<Record<string, unknown>>) {
+  if (rows.length === 0) return "";
+  const keys = Object.keys(rows[0]);
+  return [
+    keys.join(","),
+    ...rows.map((row) => keys.map((key) => JSON.stringify(row[key] ?? "")).join(",")),
+  ].join("\n");
 }
 
 function adminHtml() {

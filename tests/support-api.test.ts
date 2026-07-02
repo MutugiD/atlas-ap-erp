@@ -35,6 +35,7 @@ describe("Support Agent V2 API and RLS", () => {
     expect(admin.body).toContain("data-load=\"dlq\"");
     expect(admin.body).toContain("exportJson");
     expect(admin.body).toContain("localStorage");
+    expect(admin.body).toContain("Export CSV");
 
     const reset = await app.inject({ method: "DELETE", url: "/api/memory/api-user", headers });
     expect(reset.json().ok).toBe(true);

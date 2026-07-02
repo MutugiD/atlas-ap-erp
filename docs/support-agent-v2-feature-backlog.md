@@ -51,6 +51,7 @@ This backlog translates `Support-Agent-V2-Technical-Spec.md` into implementable 
 6. `Done/Partial`: Observability seam, Sentry scrubber shape, Grafana dashboard, alerts, load smoke, license audit, and CI image gates.
 7. `Done/Partial`: Live Postgres/Redis integration harness, degrading queue buffer, JWKS discovery seam, and richer admin shell.
 8. `Done/Partial`: SLO model, release checklist, release check script, load report template, saved admin context, loading/error states, and export actions.
+9. `Partial`: Server-side admin export endpoint and audit event; staging evidence and optional Refine framework app remain.
 
 ## PR Description - Admin And Operator Workflows
 

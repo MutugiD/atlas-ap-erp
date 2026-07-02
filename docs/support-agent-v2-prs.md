@@ -151,9 +151,10 @@ Turns the remaining deployment-specific edges into production rollout evidence a
 ## PR 9 - Staging Evidence And UI Framework Upgrade
 
 **Summary**
-Executes the gates against staging and upgrades the static admin shell to a package-managed Refine app if the product scope still requires that framework.
+Executes the gates against staging, adds server-side export workflows, and upgrades the static admin shell to a package-managed Refine app if the product scope still requires that framework.
 
 **Planned Changes**
+- Add server-side export endpoints for admin views with audit events.
 - Fill `reports/support-agent-v2-load-smoke.md` with real k6 output from staging.
 - Validate JWKS with the selected IdP issuer and audience.
 - Add Refine routes/components for explorer, graph, DLQ, PII, audit, and API-key views.
