@@ -1,0 +1,11 @@
+node_modules/
+.next/
+dist/
+cdk.out/
+.env
+.env.local
+coverage/
+*.log
+tmp/
+.tmp/
+.bun-cache/

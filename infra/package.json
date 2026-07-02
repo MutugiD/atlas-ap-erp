@@ -1,0 +1,8 @@
+{
+  "name": "@atlas/infra",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "synth": "cdk synth --app 'bun run bin/app.ts'"
+  }
+}

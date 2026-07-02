@@ -1,0 +1,26 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "skipLibCheck": true,
+    "allowJs": false,
+    "jsx": "react-jsx",
+    "baseUrl": ".",
+    "paths": {
+      "@atlas/contracts": ["packages/contracts/src/index.ts"],
+      "@atlas/agents": ["packages/agents/src/index.ts"],
+      "@atlas/db": ["packages/db/src/index.ts"]
+    }
+  },
+  "include": [
+    "apps/**/*.ts",
+    "apps/**/*.tsx",
+    "packages/**/*.ts",
+    "infra/**/*.ts",
+    "tests/**/*.ts"
+  ]
+}
+

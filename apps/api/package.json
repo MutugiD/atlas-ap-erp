@@ -1,0 +1,9 @@
+{
+  "name": "@atlas/api",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "bun run src/index.ts"
+  },
+  "main": "src/index.ts"
+}

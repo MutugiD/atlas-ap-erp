@@ -1,0 +1,63 @@
+# atlas-ap-erp
+
+Atlas AP ERP is an end-to-end, multi-tenant invoice-to-pay demo for an agentic ERP module. It implements the architecture described in `docs/implementation-session.md`: Bun, Hono, Next.js, Drizzle/Postgres RLS, AWS deployment seams, deterministic local agents, and testable API/UI/domain behavior.
+
+## What Ships
+
+- `apps/api`: Hono API with tenant-scoped invoice, event, exception, approval, reprocess, and webhook routes.
+- `apps/web`: Next.js App Router UI for inbox, invoice detail, exceptions, approvals, and ops metrics.
+- `packages/contracts`: Zod contracts shared by API, agents, DB, web, and Lambda.
+- `packages/agents`: deterministic local supervisor plus Bedrock adapter seam.
+- `packages/db`: Drizzle schema and a handwritten RLS migration reviewed for `ENABLE ROW LEVEL SECURITY`.
+- `infra`: AWS CDK stack for S3, SQS, Lambda, RDS, IAM, and Bedrock/AgentCore configuration placeholders.
+- `tests`: unit, integration, UI, Lambda, Bedrock adapter, and infrastructure checks.
+
+## Local Setup
+
+PowerShell on this machine blocks npm's `bun.ps1` shim, so use `bun.cmd` if `bun` is rejected.
+
+```powershell
+npm install -g bun
+bun.cmd install
+bun.cmd test
+```
+
+Optional local Postgres:
+
+```powershell
+docker compose up -d postgres
+```
+
+The API tests run against an in-memory repository so CI and local verification do not require live AWS or Postgres. RLS is still represented in Drizzle and covered by SQL/policy tests.
+
+## Run
+
+```powershell
+bun.cmd run dev:api
+bun.cmd run dev:web
+```
+
+Default tenant headers for API calls:
+
+- `x-tenant-id`: tenant UUID
+- `x-user-id`: user UUID
+- `x-user-role`: `ap_clerk`, `approver`, or `admin`
+
+## AWS Deploy Shape
+
+Set these before deploying CDK:
+
+- `AWS_REGION`
+- `AWS_PROFILE`
+- `DATABASE_URL`
+- `S3_INVOICE_BUCKET`
+- `BEDROCK_SUPERVISOR_AGENT_ID`
+- `BEDROCK_AGENTCORE_RUNTIME_ARN`
+- `AGENT_PROVIDER=bedrock`
+
+The CDK stack creates the document bucket, processing queue, DLQ, Lambda processor, RDS instance, and IAM boundaries. Bedrock AgentCore/Gateway identifiers are injected as configuration because account-level Bedrock setup varies.
+
+## Interview Narrative
+
+Atlas AP uses a Supervisor agent to route invoices through extraction, validation, 3-way matching, GL coding, and approval routing. Clean PO-backed invoices can post without human touch; low-confidence, duplicate, or variance cases move to an exception queue. Every agent and human decision is recorded in `agent_events`, and tenant isolation is enforced through Postgres RLS with `SET LOCAL app.tenant_id`.
+
