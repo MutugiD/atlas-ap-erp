@@ -13,6 +13,8 @@ P0 native core:
 - Deterministic extraction, regex PII redaction, deterministic embedder seam, belief revision, retrieval, episodes, artifacts, and stateless mode.
 - 13-capability contract tests as the acceptance gate.
 - Production adapters now include `PostgresNativeStore`, BullMQ queue/worker role, JWT/API-key auth paths, secure headers, per-tenant rate limiting, and structured logging.
+- Operator workflows now include admin-only explorer, supersession graph data, PII review, audit log, DLQ replay, and API-key lifecycle routes.
+- Release gates now include Apache-2.0 license/NOTICE, dependency license audit, CI workflow, Grafana dashboard, Prometheus alert rules, k6 load smoke, and observability scrubber/tracing seams.
 - The spec is translated into `docs/support-agent-v2-feature-backlog.md`, which tracks FR/NFR status and the next PR stack.
 
 ## Runtime Shape
@@ -28,6 +30,7 @@ flowchart LR
   Engine --> Store[(Postgres + pgvector in production)]
   API --> Metrics[Prometheus Metrics]
   API --> Admin[Admin Shell]
+  Metrics --> Ops[Grafana + Alerts]
 ```
 
 ## Invariants
@@ -40,8 +43,7 @@ flowchart LR
 
 ## Next Enterprise Hardening
 
-- Swap local queue fallback for BullMQ + Redis.
-- Add real Postgres store implementation behind `MemoryStore`.
-- Add JWT/JWKS verification and hashed API-key issuance.
-- Replace admin shell with Refine screens.
-- Add OpenTelemetry/Sentry and k6 load tests.
+- Replace the static admin shell with a fuller Refine UI.
+- Run live Postgres RLS and Redis BullMQ integration suites in CI service containers.
+- Add JWKS provider discovery and external IdP role mapping.
+- Convert the dependency-free tracing seam to full OpenTelemetry export when the deployment target is selected.

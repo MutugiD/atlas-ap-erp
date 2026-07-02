@@ -1,0 +1,44 @@
+{
+  "title": "Support Agent V2 Runtime",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "tags": ["support-agent-v2", "memory", "enterprise"],
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "Request Rate",
+      "targets": [{ "expr": "sum(rate(support_chat_requests_total[5m])) by (mode)" }]
+    },
+    {
+      "type": "timeseries",
+      "title": "Route p95 Latency",
+      "targets": [{ "expr": "histogram_quantile(0.95, sum(rate(support_route_duration_seconds_bucket[5m])) by (le, route))" }]
+    },
+    {
+      "type": "timeseries",
+      "title": "Memory Writes",
+      "targets": [{ "expr": "sum(rate(memory_ingest_total[5m])) by (result)" }]
+    },
+    {
+      "type": "stat",
+      "title": "Context Cache Hits",
+      "targets": [{ "expr": "sum(rate(memory_context_cache_hits_total[5m]))" }]
+    },
+    {
+      "type": "stat",
+      "title": "Queue Depth",
+      "targets": [{ "expr": "ingest_queue_depth" }]
+    },
+    {
+      "type": "stat",
+      "title": "DLQ Depth",
+      "targets": [{ "expr": "ingest_dlq_total" }]
+    },
+    {
+      "type": "timeseries",
+      "title": "Readiness Failures",
+      "targets": [{ "expr": "sum(rate(support_readiness_failures_total[5m])) by (dependency)" }]
+    }
+  ]
+}

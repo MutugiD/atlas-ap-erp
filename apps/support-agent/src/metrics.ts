@@ -34,6 +34,19 @@ export const dlqDepth = new Gauge({
   registers: [registry],
 });
 
+export const contextCacheHits = new Counter({
+  name: "memory_context_cache_hits_total",
+  help: "Memory retrieval requests that found reusable user context",
+  registers: [registry],
+});
+
+export const readinessFailures = new Counter({
+  name: "support_readiness_failures_total",
+  help: "Readiness checks that found a required dependency unavailable",
+  labelNames: ["dependency"],
+  registers: [registry],
+});
+
 export const routeDuration = new Histogram({
   name: "support_route_duration_seconds",
   help: "Support Agent route duration",

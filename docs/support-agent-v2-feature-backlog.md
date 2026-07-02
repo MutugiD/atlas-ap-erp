@@ -23,23 +23,23 @@ This backlog translates `Support-Agent-V2-Technical-Spec.md` into implementable 
 | FR-8 | Single fact lookup | PR 2 | Done | Route returns fact provenance by `factId` under org/user scope. |
 | FR-9 | Org/user isolation | PR 2/3 | Done | In-memory route tests prove cross-org/user zero rows; RLS migration exists for DB path. |
 | FR-10 | Idempotent ingest | PR 1/4 | Done | Content hash prevents duplicate replay in memory and DB store. |
-| FR-11 | Reply degradation | PR 4 | Partial | Template reply is default; next step adds explicit failure injection tests for store/queue outage. |
+| FR-11 | Reply degradation | PR 4/6 | Partial | Template reply is default; readiness and alerting exist; next step adds explicit failure injection tests for store/queue outage. |
 | FR-12 | Admin UI | PR 5 | Partial | Admin APIs and HTML operator surface exist for explorer, graph, DLQ replay, tenant/API-key mgmt, PII review, RBAC, and audit. Refine polish remains. |
 
 ## Non-Functional Requirements
 
 | Spec ID | Feature | PR | Status | Acceptance Criteria |
 |---|---|---:|---|---|
-| NFR-1 | p95 latency targets | PR 6 | Planned | k6/autocannon smoke with p95 thresholds for template and local-LLM-off path. |
+| NFR-1 | p95 latency targets | PR 6 | Done | k6 smoke includes p95 threshold for the deterministic local path. |
 | NFR-2 | Durable async writes | PR 4 | Partial | BullMQ queue/worker/DLQ implemented; next step runs integration against live Redis. |
-| NFR-3 | 99.5% availability posture | PR 6 | Planned | N>=2 deployment guidance, health probes, rolling deploy docs, alerts. |
-| NFR-4 | >=50 req/s per replica | PR 6 | Planned | Load test scenario and threshold report committed. |
+| NFR-3 | 99.5% availability posture | PR 6 | Partial | Health probes, readiness metrics, and alerts exist; deployment topology docs still need environment-specific SLO math. |
+| NFR-4 | >=50 req/s per replica | PR 6 | Done | k6 load scenario targets 50 req/s with p95 threshold. |
 | NFR-5 | Cross-tenant leak test | PR 3/4 | Partial | RLS migration and local isolation tests done; next step adds live Postgres RLS test. |
 | NFR-6 | Duplicate retry produces zero new facts | PR 1/4 | Done | Replay tests cover in-memory; DB store uses unique `content_hash`. |
 | NFR-7 | $0 external memory/mandatory LLM | PR 1 | Done | Native engine and deterministic template path are default. |
-| NFR-8 | Correlation IDs and traces | PR 4/6 | Partial | Fastify request IDs and Pino redaction implemented; OTel spans planned. |
-| NFR-9 | Queue outage degradation | PR 4/6 | Planned | Add queue failure fallback/buffer test and operator alerting. |
-| NFR-10 | Startup readiness gated on model/DB/Redis | PR 4/6 | Partial | Readiness reports store/Redis/model status; live DB/Redis gating tests planned. |
+| NFR-8 | Correlation IDs and traces | PR 4/6 | Partial | Fastify request IDs, Pino redaction, and tracing seam implemented; full OTel exporter remains deployment-specific. |
+| NFR-9 | Queue outage degradation | PR 4/6 | Partial | DLQ/operator alerting exists; fallback buffer and live Redis failure tests remain. |
+| NFR-10 | Startup readiness gated on model/DB/Redis | PR 4/6 | Partial | Readiness reports store/Redis/model status and emits failure metrics; live DB/Redis gating tests planned. |
 
 ## Current PR Stack
 
@@ -48,12 +48,13 @@ This backlog translates `Support-Agent-V2-Technical-Spec.md` into implementable 
 3. `Done`: pgvector/RLS schema, Docker Compose Postgres+Redis, single-container Dockerfile.
 4. `Done/Partial`: Postgres store, BullMQ queue/worker/DLQ, JWT/API-key auth, rate limit, helmet, Pino.
 5. `Partial`: Admin/operator APIs, RBAC, graph data, DLQ replay, API-key lifecycle, PII review, audit trail.
-6. `Next`: Refine UI polish plus OTel/Sentry/Grafana/load tests/license audit/CI image release gates.
+6. `Done/Partial`: Observability seam, Sentry scrubber shape, Grafana dashboard, alerts, load smoke, license audit, and CI image gates.
+7. `Next`: Live Postgres/Redis integration harness and Refine admin polish.
 
-## PR Description — Refine Admin And Operator Workflows
+## PR Description - Admin And Operator Workflows
 
 **Summary**
-Build the operator UI promised by FR-12: searchable memory explorer, supersession graph, DLQ inspector/replay, tenant/API-key management, and PII review.
+Build the operator workflow promised by FR-12: searchable memory explorer, supersession graph, DLQ inspector/replay, tenant/API-key management, and PII review.
 
 **Acceptance Criteria**
 - Admin-only routes require `role=admin`.
@@ -63,15 +64,26 @@ Build the operator UI promised by FR-12: searchable memory explorer, supersessio
 - API-key issuance stores only hashes and writes audit events.
 - Tests cover RBAC, graph data shape, DLQ replay, and audit writes.
 
-## Next PR Description — Observability, Compliance, And Release Gates
+## PR Description - Observability, Compliance, And Release Gates
 
 **Summary**
-Complete release readiness with tracing, Sentry, Grafana dashboard assets, load-test smoke, Apache-2.0 licensing, dependency audit, and CI.
+Complete release readiness with tracing seams, Sentry scrubber shape, Grafana dashboard assets, alert rules, load-test smoke, Apache-2.0 licensing, dependency audit, and CI.
 
 **Acceptance Criteria**
-- OpenTelemetry spans wrap chat, retrieve, enqueue, extract, revise, and admin actions.
-- Sentry is configured with PII scrubbing and release tags.
+- Tracing spans wrap chat, retrieve, and enqueue; extract/revise spans are reserved in the typed seam.
+- Sentry event shape includes PII scrubbing and release tags.
 - Grafana dashboard JSON and alert rules cover queue depth, DLQ, p95 latency, cache hit rate, and readiness failures.
-- k6/autocannon smoke validates p95 and throughput thresholds.
+- k6 smoke validates p95 and throughput thresholds.
 - Apache-2.0 `LICENSE`, `NOTICE`, and dependency/model license audit script exist.
 - CI workflow runs install, typecheck, tests, builds, migration checks, Docker build, and license audit.
+
+## Next PR Description - Live Integration Harness And Refine Admin Polish
+
+**Summary**
+Move the remaining partial items from source-level enterprise seams to live integration checks and a richer operator UI.
+
+**Acceptance Criteria**
+- CI service containers run a live pgvector/Postgres RLS test and Redis/BullMQ enqueue/DLQ test.
+- Queue outage fallback and memory degradation are covered by failure-injection tests.
+- Refine admin shell renders explorer, graph, DLQ, PII, audit, and API-key workflows with route-level RBAC.
+- JWKS discovery and external IdP role mapping are configurable.

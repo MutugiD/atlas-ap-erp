@@ -12,7 +12,8 @@ Atlas AP ERP is an end-to-end, multi-tenant invoice-to-pay demo for an agentic E
 - `packages/db`: Drizzle schema and a handwritten RLS migration reviewed for `ENABLE ROW LEVEL SECURITY`.
 - `packages/support-contracts`, `packages/memory-engine`, `packages/support-db`: Support Agent V2 contracts, native memory engine, and pgvector/RLS schema.
 - `infra`: AWS CDK stack for S3, SQS, Lambda, RDS, IAM, and Bedrock/AgentCore configuration placeholders.
-- `tests`: unit, integration, UI, Lambda, Bedrock adapter, and infrastructure checks.
+- `ops`: Grafana dashboard and Prometheus alert rules for Support Agent V2.
+- `tests`: unit, integration, UI, Lambda, Bedrock adapter, infrastructure, release-gate, and load-smoke checks.
 
 ## Local Setup
 
@@ -22,6 +23,7 @@ PowerShell on this machine blocks npm's `bun.ps1` shim, so use `bun.cmd` if `bun
 npm install -g bun
 bun.cmd install
 bun.cmd test
+bun.cmd run license:audit
 ```
 
 Optional local Postgres:
@@ -65,3 +67,10 @@ The CDK stack creates the document bucket, processing queue, DLQ, Lambda process
 Atlas AP uses a Supervisor agent to route invoices through extraction, validation, 3-way matching, GL coding, and approval routing. Clean PO-backed invoices can post without human touch; low-confidence, duplicate, or variance cases move to an exception queue. Every agent and human decision is recorded in `agent_events`, and tenant isolation is enforced through Postgres RLS with `SET LOCAL app.tenant_id`.
 
 Support Agent V2 adds a native belief-revision memory engine: deterministic fact extraction, PII redaction, local embeddings seam, idempotent writes, supersession lineage, context retrieval, stateless mode, Postgres/pgvector persistence seam, BullMQ durable ingest seam, JWT/API-key auth, per-tenant rate limiting, and a 13-capability contract suite.
+
+## Support Agent V2 Release Gates
+
+- CI runs install, license audit, tests, TypeScript checks, Support Agent build, Next.js build, CDK synth, Docker Compose config, and Support Agent image build.
+- `ops/grafana/support-agent-dashboard.json` covers request rate, p95 latency, ingest results, context reuse, queue depth, DLQ depth, and readiness failures.
+- `ops/alerts/support-agent-alerts.yml` covers high latency, DLQ backlog, queue backlog, readiness failure, and low memory-context reuse.
+- `tests/load/support-agent-k6.js` is the k6 smoke target for 50 req/s and p95 under 400ms.

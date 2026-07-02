@@ -1,0 +1,38 @@
+groups:
+  - name: support-agent-v2
+    rules:
+      - alert: SupportAgentHighLatency
+        expr: histogram_quantile(0.95, sum(rate(support_route_duration_seconds_bucket[5m])) by (le, route)) > 0.4
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Support Agent p95 latency is above 400ms
+      - alert: SupportAgentDlqNotEmpty
+        expr: ingest_dlq_total > 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: Support Agent ingest DLQ has failed jobs
+      - alert: SupportAgentQueueBacklog
+        expr: ingest_queue_depth > 1000
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Support Agent ingest queue backlog is growing
+      - alert: SupportAgentReadinessFailure
+        expr: increase(support_readiness_failures_total[5m]) > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: Support Agent readiness probe is failing
+      - alert: SupportAgentLowContextReuse
+        expr: sum(rate(memory_context_cache_hits_total[30m])) < 0.01 and sum(rate(support_chat_requests_total{mode="with_memory"}[30m])) > 1
+        for: 30m
+        labels:
+          severity: info
+        annotations:
+          summary: Memory-aware traffic is not reusing stored context

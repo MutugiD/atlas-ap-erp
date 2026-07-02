@@ -1,6 +1,7 @@
 {
   "name": "atlas-ap-erp",
   "private": true,
+  "license": "Apache-2.0",
   "type": "module",
   "packageManager": "bun@1.3.14",
   "workspaces": [
@@ -15,7 +16,8 @@
     "test": "bun test",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "infra:synth": "bun --filter @atlas/infra synth",
-    "db:generate": "drizzle-kit generate --config packages/db/drizzle.config.ts"
+    "db:generate": "drizzle-kit generate --config packages/db/drizzle.config.ts",
+    "license:audit": "bun run scripts/license-audit.ts"
   },
   "dependencies": {
     "@aws-sdk/client-bedrock-agent-runtime": "^3.699.0",

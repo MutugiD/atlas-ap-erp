@@ -12,7 +12,18 @@ import { InMemoryNativeStore, PostgresNativeStore, RegexRedactor, renderTemplate
 import { AdminControlPlane, buildSupersessionGraph } from "./admin";
 import { authenticate } from "./auth";
 import { BullMqIngestQueue, LocalIngestQueue, type IngestQueue } from "./queue";
-import { chatRequests, dlqDepth, memoryIngest, queueDepth, registry, routeDuration, supersessions } from "./metrics";
+import {
+  chatRequests,
+  contextCacheHits,
+  dlqDepth,
+  memoryIngest,
+  queueDepth,
+  readinessFailures,
+  registry,
+  routeDuration,
+  supersessions,
+} from "./metrics";
+import { observability } from "./observability";
 
 export function buildSupportApp(options: { store?: MemoryStore; queue?: IngestQueue; admin?: AdminControlPlane } = {}) {
   const app = Fastify({
@@ -59,14 +70,18 @@ export function buildSupportApp(options: { store?: MemoryStore; queue?: IngestQu
 
   app.get("/health/live", async () => ({ ok: true, service: "support-agent-v2" }));
 
-  app.get("/health/ready", async () => ({
-    ok: await store.ready(),
-    dependencies: {
-      memory: (await store.ready()) ? "ready" : "unavailable",
-      redis: process.env.REDIS_URL ? "configured" : "local-fallback",
-      model: "deterministic",
-    },
-  }));
+  app.get("/health/ready", async () => {
+    const memoryReady = await store.ready();
+    if (!memoryReady) readinessFailures.inc({ dependency: "memory" });
+    return {
+      ok: memoryReady,
+      dependencies: {
+        memory: memoryReady ? "ready" : "unavailable",
+        redis: process.env.REDIS_URL ? "configured" : "local-fallback",
+        model: "deterministic",
+      },
+    };
+  });
 
   app.get("/metrics", async (_request, reply) => {
     queueDepth.set(await queue.depth());
@@ -75,55 +90,61 @@ export function buildSupportApp(options: { store?: MemoryStore; queue?: IngestQu
     return registry.metrics();
   });
 
-  app.post("/api/chat", async (request) => {
-    const body = chatRequestSchema.parse(request.body);
-    chatRequests.inc({ mode: body.mode });
-    let contextPrompt = "";
-    let retrievedFacts = 0;
-    let writeResult = { queued: false, inserted: 0, superseded: 0, duplicate: 0 };
+  app.post("/api/chat", async (request) =>
+    observability.withSpan("support.chat", { mode: (request.body as { mode?: string }).mode ?? "unknown" }, async () => {
+      const body = chatRequestSchema.parse(request.body);
+      chatRequests.inc({ mode: body.mode });
+      let contextPrompt = "";
+      let retrievedFacts = 0;
+      let writeResult = { queued: false, inserted: 0, superseded: 0, duplicate: 0 };
 
-    if (body.mode === "with_memory") {
-      const pii = redactor.redact(body.message);
-      for (const redaction of pii.redactions) {
-        admin.recordPii({
-          orgId: request.org.orgId,
-          userId: body.userId,
-          convId: body.convId,
-          kind: redaction.kind,
-          maskedValue: redaction.kind === "email" ? "[REDACTED_EMAIL]" : "[REDACTED_PHONE]",
-          sourceRole: "customer",
+      if (body.mode === "with_memory") {
+        const pii = redactor.redact(body.message);
+        for (const redaction of pii.redactions) {
+          admin.recordPii({
+            orgId: request.org.orgId,
+            userId: body.userId,
+            convId: body.convId,
+            kind: redaction.kind,
+            maskedValue: redaction.kind === "email" ? "[REDACTED_EMAIL]" : "[REDACTED_PHONE]",
+            sourceRole: "customer",
+          });
+        }
+        const context = await observability.withSpan("memory.retrieve", { orgId: request.org.orgId, userId: body.userId }, () =>
+          store.retrieve({ orgId: request.org.orgId, userId: body.userId, query: body.message }),
+        );
+        contextPrompt = context.contextPrompt;
+        retrievedFacts = context.facts.length;
+        if (retrievedFacts > 0) contextCacheHits.inc();
+        writeResult = await observability.withSpan("memory.enqueue", { orgId: request.org.orgId, userId: body.userId }, () =>
+          queue.enqueue({
+            orgId: request.org.orgId,
+            userId: body.userId,
+            convId: body.convId,
+            sourceRole: "customer",
+            message: body.message,
+            occurredAt: body.occurredAt,
+          }),
+        );
+        memoryIngest.inc({ result: writeResult.inserted > 0 ? "inserted" : "duplicate_or_empty" });
+        if (writeResult.superseded > 0) supersessions.inc(writeResult.superseded);
+        await admin.audit(request.org, "memory.ingest_enqueued", "user_memory", body.userId, {
+          inserted: writeResult.inserted,
+          superseded: writeResult.superseded,
+          duplicate: writeResult.duplicate,
         });
       }
-      const context = await store.retrieve({ orgId: request.org.orgId, userId: body.userId, query: body.message });
-      contextPrompt = context.contextPrompt;
-      retrievedFacts = context.facts.length;
-      writeResult = await queue.enqueue({
-        orgId: request.org.orgId,
-        userId: body.userId,
-        convId: body.convId,
-        sourceRole: "customer",
-        message: body.message,
-        occurredAt: body.occurredAt,
-      });
-      memoryIngest.inc({ result: writeResult.inserted > 0 ? "inserted" : "duplicate_or_empty" });
-      if (writeResult.superseded > 0) supersessions.inc(writeResult.superseded);
-      await admin.audit(request.org, "memory.ingest_enqueued", "user_memory", body.userId, {
-        inserted: writeResult.inserted,
-        superseded: writeResult.superseded,
-        duplicate: writeResult.duplicate,
-      });
-    }
 
-    const response: ChatResponse = {
-      reply: renderTemplateReply(body.message, contextPrompt),
-      mode: body.mode,
-      contextPrompt,
-      retrievedFacts,
-      writeResult,
-      degraded: false,
-    };
-    return response;
-  });
+      const response: ChatResponse = {
+        reply: renderTemplateReply(body.message, contextPrompt),
+        mode: body.mode,
+        contextPrompt,
+        retrievedFacts,
+        writeResult,
+        degraded: false,
+      };
+      return response;
+    }));
 
   app.get("/api/memory/:userId", async (request) => {
     const { userId } = request.params as { userId: string };

@@ -1,0 +1,6 @@
+Atlas AP ERP and Support Agent V2
+Copyright 2026.
+
+This product includes software developed for the Atlas AP ERP and Support Agent V2 reference implementation.
+
+Support Agent V2 implements a native memory engine, deterministic belief revision, Fastify APIs, Postgres/pgvector persistence seams, and operator workflows. Third-party dependencies retain their respective licenses and notices.
