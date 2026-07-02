@@ -9,5 +9,4 @@ RUN bun install --frozen-lockfile
 ENV PORT=3002
 ENV APP_ROLE=web
 EXPOSE 3002
-CMD ["bun", "--filter", "@atlas/support-agent", "dev"]
-
+CMD ["sh", "-lc", "if [ \"$APP_ROLE\" = \"worker\" ]; then bun run apps/support-agent/src/worker.ts; else bun --filter @atlas/support-agent dev; fi"]

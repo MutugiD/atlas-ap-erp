@@ -57,21 +57,51 @@ Adds production persistence and runtime foundations: Postgres 16 + pgvector sche
 - `set_config('app.org_id', ..., true)` tenant scoping check.
 - Typecheck and app build.
 
-## PR 4 — Production Hardening Follow-Up
+## PR 4 — Production Persistence, Queue, Auth, And Runtime Hardening
 
 **Summary**
-Replaces local seams with enterprise-grade runtime integrations after the native core is green.
+Replaces local-only seams with enterprise-grade runtime integrations while preserving deterministic tests.
 
 **Changes**
-- Add real Postgres-backed `NativeStore`.
-- Add BullMQ + Redis durable ingest queue, retry policy, and DLQ replay.
-- Add JWT/JWKS verification and hashed API-key issuance/rotation.
-- Add OpenTelemetry, Pino request logging, Sentry, and richer Prometheus metrics.
-- Replace admin shell with Refine memory explorer, supersession graph, DLQ inspector, tenant management, and PII review.
+- Add real Postgres-backed `NativeStore` selected by `DATABASE_URL`.
+- Add BullMQ + Redis durable ingest queue, retry policy, worker role, and DLQ queue.
+- Add JWT/API-key verification paths, production auth enforcement, secure headers, and per-tenant rate limiting.
+- Add structured Pino logging with correlation IDs and secret redaction.
+- Keep local deterministic mode as the default for fast contract tests.
 
 **Tests**
 - Queue/DLQ integration tests.
-- Cross-tenant DB leak test against Postgres.
+- Postgres store SQL/advisory-lock/RLS behavior tests.
 - Graceful degradation tests for Redis/Postgres/Ollama outages.
 - k6/autocannon smoke for latency and throughput.
 
+## PR 5 — Refine Admin And Operator Workflows
+
+**Summary**
+Turns the admin shell into an operator-ready management UI.
+
+**Changes**
+- Add Refine admin app served by the Fastify container.
+- Implement memory explorer, supersession graph, DLQ inspector/replay, tenant/API-key management, and PII redaction review.
+- Add admin RBAC and audit log writes for every mutation.
+
+**Tests**
+- Admin route RBAC tests.
+- Supersession graph rendering smoke tests.
+- DLQ replay route tests.
+- Audit log assertions for admin actions.
+
+## PR 6 — Observability, Compliance, And Release Gates
+
+**Summary**
+Completes enterprise release readiness.
+
+**Changes**
+- Add OpenTelemetry spans, Sentry integration, Grafana dashboard JSON, alert rules, and k6/autocannon load scenarios.
+- Add Apache-2.0 `LICENSE`, `NOTICE`, SPDX headers for new Support Agent source, and dependency/model license audit script.
+- Add CI workflow for install, typecheck, tests, build, migration checks, and image build.
+
+**Tests**
+- Metrics and tracing smoke tests.
+- License audit script check.
+- Load-test smoke threshold check.

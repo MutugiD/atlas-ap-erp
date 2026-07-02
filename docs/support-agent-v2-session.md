@@ -12,6 +12,8 @@ P0 native core:
 - pgvector/RLS schema and migration in `packages/support-db`.
 - Deterministic extraction, regex PII redaction, deterministic embedder seam, belief revision, retrieval, episodes, artifacts, and stateless mode.
 - 13-capability contract tests as the acceptance gate.
+- Production adapters now include `PostgresNativeStore`, BullMQ queue/worker role, JWT/API-key auth paths, secure headers, per-tenant rate limiting, and structured logging.
+- The spec is translated into `docs/support-agent-v2-feature-backlog.md`, which tracks FR/NFR status and the next PR stack.
 
 ## Runtime Shape
 
@@ -43,4 +45,3 @@ flowchart LR
 - Add JWT/JWKS verification and hashed API-key issuance.
 - Replace admin shell with Refine screens.
 - Add OpenTelemetry/Sentry and k6 load tests.
-

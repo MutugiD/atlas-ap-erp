@@ -1,19 +1,37 @@
 import Fastify from "fastify";
+import helmet from "@fastify/helmet";
+import rateLimit from "@fastify/rate-limit";
 import {
   chatRequestSchema,
   demoScenarioSchema,
   memoryTypeSchema,
   type ChatResponse,
 } from "@atlas/support-contracts";
-import { InMemoryNativeStore, renderTemplateReply } from "@atlas/memory-engine";
+import { InMemoryNativeStore, PostgresNativeStore, renderTemplateReply, type MemoryStore } from "@atlas/memory-engine";
 import { authenticate } from "./auth";
-import { LocalIngestQueue } from "./queue";
+import { BullMqIngestQueue, LocalIngestQueue, type IngestQueue } from "./queue";
 import { chatRequests, dlqDepth, memoryIngest, queueDepth, registry, routeDuration, supersessions } from "./metrics";
 
-export function buildSupportApp(options: { store?: InMemoryNativeStore } = {}) {
-  const app = Fastify({ logger: false });
-  const store = options.store ?? new InMemoryNativeStore();
-  const queue = new LocalIngestQueue(store);
+export function buildSupportApp(options: { store?: MemoryStore; queue?: IngestQueue } = {}) {
+  const app = Fastify({
+    logger:
+      process.env.SUPPORT_AGENT_LOG === "true"
+        ? {
+            level: process.env.LOG_LEVEL ?? "info",
+            redact: ["req.headers.authorization", "req.headers.x-api-key", "request.headers.authorization", "request.headers.x-api-key"],
+          }
+        : false,
+    genReqId: (request) => String(request.headers["x-correlation-id"] ?? crypto.randomUUID()),
+  });
+  const store = options.store ?? createDefaultStore();
+  const queue = options.queue ?? createDefaultQueue(store);
+
+  void app.register(helmet);
+  void app.register(rateLimit, {
+    max: Number(process.env.RATE_LIMIT_PER_TENANT ?? 120),
+    timeWindow: "1 minute",
+    keyGenerator: (request) => `${request.headers["x-org-id"] ?? "anonymous"}:${request.ip}`,
+  });
 
   app.removeContentTypeParser("application/json");
   app.addContentTypeParser("application/json", { parseAs: "string" }, (_request, body, done) => {
@@ -39,7 +57,11 @@ export function buildSupportApp(options: { store?: InMemoryNativeStore } = {}) {
 
   app.get("/health/ready", async () => ({
     ok: await store.ready(),
-    dependencies: { memory: "ready", redis: "local-fallback", model: "deterministic" },
+    dependencies: {
+      memory: (await store.ready()) ? "ready" : "unavailable",
+      redis: process.env.REDIS_URL ? "configured" : "local-fallback",
+      model: "deterministic",
+    },
   }));
 
   app.get("/metrics", async (_request, reply) => {
@@ -147,4 +169,14 @@ export function buildSupportApp(options: { store?: InMemoryNativeStore } = {}) {
   });
 
   return app;
+}
+
+export function createDefaultStore(): MemoryStore {
+  return process.env.DATABASE_URL ? new PostgresNativeStore({ connectionString: process.env.DATABASE_URL }) : new InMemoryNativeStore();
+}
+
+export function createDefaultQueue(store: MemoryStore): IngestQueue {
+  return process.env.REDIS_URL
+    ? new BullMqIngestQueue(store, { redisUrl: process.env.REDIS_URL, startWorker: process.env.APP_ROLE !== "web" })
+    : new LocalIngestQueue(store);
 }

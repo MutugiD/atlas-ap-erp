@@ -45,5 +45,5 @@ export interface MemoryStore {
   listByType(input: { orgId: string; userId: string; type: MemoryType }): Promise<Array<Fact | Episode | Artifact>>;
   reset(input: { orgId: string; userId: string }): Promise<void>;
   ready(): Promise<boolean>;
+  close?(): Promise<void>;
 }
-

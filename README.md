@@ -6,9 +6,11 @@ Atlas AP ERP is an end-to-end, multi-tenant invoice-to-pay demo for an agentic E
 
 - `apps/api`: Hono API with tenant-scoped invoice, event, exception, approval, reprocess, and webhook routes.
 - `apps/web`: Next.js App Router UI for inbox, invoice detail, exceptions, approvals, and ops metrics.
+- `apps/support-agent`: Fastify Support Agent V2 API with native memory, belief revision, auth seams, queue seams, metrics, and admin shell.
 - `packages/contracts`: Zod contracts shared by API, agents, DB, web, and Lambda.
 - `packages/agents`: deterministic local supervisor plus Bedrock adapter seam.
 - `packages/db`: Drizzle schema and a handwritten RLS migration reviewed for `ENABLE ROW LEVEL SECURITY`.
+- `packages/support-contracts`, `packages/memory-engine`, `packages/support-db`: Support Agent V2 contracts, native memory engine, and pgvector/RLS schema.
 - `infra`: AWS CDK stack for S3, SQS, Lambda, RDS, IAM, and Bedrock/AgentCore configuration placeholders.
 - `tests`: unit, integration, UI, Lambda, Bedrock adapter, and infrastructure checks.
 
@@ -35,6 +37,7 @@ The API tests run against an in-memory repository so CI and local verification d
 ```powershell
 bun.cmd run dev:api
 bun.cmd run dev:web
+bun.cmd run dev:support
 ```
 
 Default tenant headers for API calls:
@@ -61,3 +64,4 @@ The CDK stack creates the document bucket, processing queue, DLQ, Lambda process
 
 Atlas AP uses a Supervisor agent to route invoices through extraction, validation, 3-way matching, GL coding, and approval routing. Clean PO-backed invoices can post without human touch; low-confidence, duplicate, or variance cases move to an exception queue. Every agent and human decision is recorded in `agent_events`, and tenant isolation is enforced through Postgres RLS with `SET LOCAL app.tenant_id`.
 
+Support Agent V2 adds a native belief-revision memory engine: deterministic fact extraction, PII redaction, local embeddings seam, idempotent writes, supersession lineage, context retrieval, stateless mode, Postgres/pgvector persistence seam, BullMQ durable ingest seam, JWT/API-key auth, per-tenant rate limiting, and a 13-capability contract suite.

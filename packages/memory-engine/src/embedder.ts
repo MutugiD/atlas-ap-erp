@@ -1,8 +1,10 @@
 import type { Embedder } from "./types";
 
 export class DeterministicEmbedder implements Embedder {
+  constructor(private readonly dimensions = 384) {}
+
   async embed(text: string) {
-    const vector = Array.from({ length: 8 }, () => 0);
+    const vector = Array.from({ length: this.dimensions }, () => 0);
     for (let index = 0; index < text.length; index++) {
       vector[index % vector.length] += text.charCodeAt(index) / 255;
     }
@@ -23,4 +25,3 @@ export function cosine(a: number[], b: number[]) {
   }
   return dot / ((Math.sqrt(aMag) || 1) * (Math.sqrt(bMag) || 1));
 }
-
