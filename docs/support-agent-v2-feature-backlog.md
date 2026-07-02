@@ -24,7 +24,7 @@ This backlog translates `Support-Agent-V2-Technical-Spec.md` into implementable 
 | FR-9 | Org/user isolation | PR 2/3 | Done | In-memory route tests prove cross-org/user zero rows; RLS migration exists for DB path. |
 | FR-10 | Idempotent ingest | PR 1/4 | Done | Content hash prevents duplicate replay in memory and DB store. |
 | FR-11 | Reply degradation | PR 4 | Partial | Template reply is default; next step adds explicit failure injection tests for store/queue outage. |
-| FR-12 | Admin UI | PR 5 | Planned | Replace shell with Refine memory explorer, graph, DLQ replay, tenant/API-key mgmt, and PII review. |
+| FR-12 | Admin UI | PR 5 | Partial | Admin APIs and HTML operator surface exist for explorer, graph, DLQ replay, tenant/API-key mgmt, PII review, RBAC, and audit. Refine polish remains. |
 
 ## Non-Functional Requirements
 
@@ -47,10 +47,10 @@ This backlog translates `Support-Agent-V2-Technical-Spec.md` into implementable 
 2. `Done`: Fastify API, stateless mode, 13-capability contract, health, metrics, admin shell.
 3. `Done`: pgvector/RLS schema, Docker Compose Postgres+Redis, single-container Dockerfile.
 4. `Done/Partial`: Postgres store, BullMQ queue/worker/DLQ, JWT/API-key auth, rate limit, helmet, Pino.
-5. `Next`: Refine admin and operator workflows.
-6. `Planned`: OTel/Sentry/Grafana/load tests/license audit/CI image release gates.
+5. `Partial`: Admin/operator APIs, RBAC, graph data, DLQ replay, API-key lifecycle, PII review, audit trail.
+6. `Next`: Refine UI polish plus OTel/Sentry/Grafana/load tests/license audit/CI image release gates.
 
-## Next PR Description — Refine Admin And Operator Workflows
+## PR Description — Refine Admin And Operator Workflows
 
 **Summary**
 Build the operator UI promised by FR-12: searchable memory explorer, supersession graph, DLQ inspector/replay, tenant/API-key management, and PII review.
@@ -63,3 +63,15 @@ Build the operator UI promised by FR-12: searchable memory explorer, supersessio
 - API-key issuance stores only hashes and writes audit events.
 - Tests cover RBAC, graph data shape, DLQ replay, and audit writes.
 
+## Next PR Description — Observability, Compliance, And Release Gates
+
+**Summary**
+Complete release readiness with tracing, Sentry, Grafana dashboard assets, load-test smoke, Apache-2.0 licensing, dependency audit, and CI.
+
+**Acceptance Criteria**
+- OpenTelemetry spans wrap chat, retrieve, enqueue, extract, revise, and admin actions.
+- Sentry is configured with PII scrubbing and release tags.
+- Grafana dashboard JSON and alert rules cover queue depth, DLQ, p95 latency, cache hit rate, and readiness failures.
+- k6/autocannon smoke validates p95 and throughput thresholds.
+- Apache-2.0 `LICENSE`, `NOTICE`, and dependency/model license audit script exist.
+- CI workflow runs install, typecheck, tests, builds, migration checks, Docker build, and license audit.

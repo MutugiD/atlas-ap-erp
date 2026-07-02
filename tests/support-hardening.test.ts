@@ -71,7 +71,7 @@ describe("Support Agent V2 production hardening", () => {
       "PR 4",
       "Production Persistence, Queue, Auth, And Runtime Hardening",
       "PR 5",
-      "Refine Admin And Operator Workflows",
+      "Admin And Operator Workflows",
       "PR 6",
       "Observability, Compliance, And Release Gates",
     ]) {

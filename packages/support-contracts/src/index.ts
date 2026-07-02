@@ -124,13 +124,73 @@ export const auditEventSchema = z.object({
   action: z.string(),
   targetType: z.string(),
   targetId: z.string().optional(),
+  metadata: z.record(z.unknown()).optional(),
   createdAt: z.string(),
 });
 export type AuditEvent = z.infer<typeof auditEventSchema>;
+
+export const apiKeyCreateSchema = z.object({
+  label: z.string().min(1),
+  role: z.enum(["agent", "admin", "service"]).default("service"),
+});
+export type ApiKeyCreate = z.infer<typeof apiKeyCreateSchema>;
+
+export const apiKeyRecordSchema = z.object({
+  id: uuidSchema,
+  orgId: uuidSchema,
+  label: z.string(),
+  role: z.enum(["agent", "admin", "service"]),
+  keyHash: z.string().length(64),
+  createdAt: z.string(),
+  revokedAt: z.string().optional(),
+});
+export type ApiKeyRecord = z.infer<typeof apiKeyRecordSchema>;
+
+export const piiRedactionEventSchema = z.object({
+  id: uuidSchema,
+  orgId: uuidSchema,
+  userId: z.string(),
+  convId: z.string(),
+  kind: z.string(),
+  maskedValue: z.string(),
+  sourceRole: z.enum(["customer", "agent", "system"]),
+  createdAt: z.string(),
+});
+export type PiiRedactionEvent = z.infer<typeof piiRedactionEventSchema>;
+
+export const supersessionGraphSchema = z.object({
+  lanes: z.array(
+    z.object({
+      slotKey: z.string(),
+      activeFactId: uuidSchema.optional(),
+      nodes: z.array(
+        z.object({
+          id: uuidSchema,
+          label: z.string(),
+          status: factStatusSchema,
+          createdAt: z.string(),
+        }),
+      ),
+    }),
+  ),
+  edges: z.array(z.object({ from: uuidSchema, to: uuidSchema, label: z.string() })),
+});
+export type SupersessionGraph = z.infer<typeof supersessionGraphSchema>;
+
+export const dlqJobSchema = z.object({
+  id: uuidSchema,
+  orgId: uuidSchema,
+  userId: z.string(),
+  convId: z.string(),
+  message: z.string(),
+  failedReason: z.string(),
+  createdAt: z.string(),
+  replayedAt: z.string().optional(),
+});
+export type DlqJob = z.infer<typeof dlqJobSchema>;
 
 export const demoScenarioSchema = z.object({
   name: z.string().default("contradiction-demo"),
   userId: z.string().optional(),
   messages: z.array(z.string()).optional(),
 });
-

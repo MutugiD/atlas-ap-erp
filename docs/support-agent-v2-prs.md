@@ -75,15 +75,16 @@ Replaces local-only seams with enterprise-grade runtime integrations while prese
 - Graceful degradation tests for Redis/Postgres/Ollama outages.
 - k6/autocannon smoke for latency and throughput.
 
-## PR 5 — Refine Admin And Operator Workflows
+## PR 5 — Admin And Operator Workflows
 
 **Summary**
-Turns the admin shell into an operator-ready management UI.
+Turns the admin shell into an operator-ready management API and UI foundation.
 
 **Changes**
-- Add Refine admin app served by the Fastify container.
-- Implement memory explorer, supersession graph, DLQ inspector/replay, tenant/API-key management, and PII redaction review.
+- Add admin endpoints served by the Fastify container.
+- Implement memory explorer, supersession graph data, DLQ inspector/replay, tenant/API-key management, and PII redaction review.
 - Add admin RBAC and audit log writes for every mutation.
+- Keep the current HTML admin as the static single-container surface; Refine polish remains a follow-up.
 
 **Tests**
 - Admin route RBAC tests.
