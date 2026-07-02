@@ -41,6 +41,8 @@ jobs:
         run: bun install --frozen-lockfile
       - name: License audit
         run: bun run license:audit
+      - name: Release check
+        run: bun run release:check
       - name: Test
         run: bun test
       - name: Live Support Agent integration

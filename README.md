@@ -24,6 +24,7 @@ npm install -g bun
 bun.cmd install
 bun.cmd test
 bun.cmd run license:audit
+bun.cmd run release:check
 ```
 
 Optional local Postgres:
@@ -71,6 +72,7 @@ Support Agent V2 adds a native belief-revision memory engine: deterministic fact
 ## Support Agent V2 Release Gates
 
 - CI runs install, license audit, tests, TypeScript checks, Support Agent build, Next.js build, CDK synth, Docker Compose config, and Support Agent image build.
+- `docs/support-agent-v2-slo.md` and `docs/support-agent-v2-release-checklist.md` define rollout, rollback, SLO, and release evidence gates.
 - `ops/grafana/support-agent-dashboard.json` covers request rate, p95 latency, ingest results, context reuse, queue depth, DLQ depth, and readiness failures.
 - `ops/alerts/support-agent-alerts.yml` covers high latency, DLQ backlog, queue backlog, readiness failure, and low memory-context reuse.
 - `tests/load/support-agent-k6.js` is the k6 smoke target for 50 req/s and p95 under 400ms.

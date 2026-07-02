@@ -18,7 +18,8 @@
     "infra:synth": "bun --filter @atlas/infra synth",
     "db:generate": "drizzle-kit generate --config packages/db/drizzle.config.ts",
     "license:audit": "bun run scripts/license-audit.ts",
-    "test:live-support": "bun run scripts/run-live-support-tests.ts"
+    "test:live-support": "bun run scripts/run-live-support-tests.ts",
+    "release:check": "bun run scripts/support-release-check.ts"
   },
   "dependencies": {
     "@aws-sdk/client-bedrock-agent-runtime": "^3.699.0",

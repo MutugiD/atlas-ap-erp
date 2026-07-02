@@ -32,7 +32,7 @@ This backlog translates `Support-Agent-V2-Technical-Spec.md` into implementable 
 |---|---|---:|---|---|
 | NFR-1 | p95 latency targets | PR 6 | Done | k6 smoke includes p95 threshold for the deterministic local path. |
 | NFR-2 | Durable async writes | PR 4/7 | Done | BullMQ queue/worker/DLQ implemented; live Redis worker test is available in CI/service-container harness. |
-| NFR-3 | 99.5% availability posture | PR 6 | Partial | Health probes, readiness metrics, and alerts exist; deployment topology docs still need environment-specific SLO math. |
+| NFR-3 | 99.5% availability posture | PR 6/8 | Done | Health probes, readiness metrics, alerts, SLO model, release checklist, and rollback triggers exist. |
 | NFR-4 | >=50 req/s per replica | PR 6 | Done | k6 load scenario targets 50 req/s with p95 threshold. |
 | NFR-5 | Cross-tenant leak test | PR 3/4/7 | Done | RLS migration, local isolation, and live Postgres app-role RLS harness exist. |
 | NFR-6 | Duplicate retry produces zero new facts | PR 1/4 | Done | Replay tests cover in-memory; DB store uses unique `content_hash`. |
@@ -50,6 +50,7 @@ This backlog translates `Support-Agent-V2-Technical-Spec.md` into implementable 
 5. `Partial`: Admin/operator APIs, RBAC, graph data, DLQ replay, API-key lifecycle, PII review, audit trail.
 6. `Done/Partial`: Observability seam, Sentry scrubber shape, Grafana dashboard, alerts, load smoke, license audit, and CI image gates.
 7. `Done/Partial`: Live Postgres/Redis integration harness, degrading queue buffer, JWKS discovery seam, and richer admin shell.
+8. `Done/Partial`: SLO model, release checklist, release check script, load report template, saved admin context, loading/error states, and export actions.
 
 ## PR Description - Admin And Operator Workflows
 
@@ -88,7 +89,7 @@ Move the remaining partial items from source-level enterprise seams to live inte
 - Refine admin shell renders explorer, graph, DLQ, PII, audit, and API-key workflows with route-level RBAC.
 - JWKS discovery and external IdP role mapping are configurable.
 
-## Next PR Description - Production Deployment SLO And Admin Productization
+## PR Description - Production Deployment SLO And Admin Productization
 
 **Summary**
 Convert the remaining deployment-specific partials into final production posture.
@@ -98,3 +99,13 @@ Convert the remaining deployment-specific partials into final production posture
 - Admin UI has production routing, saved filters, empty/loading/error states, and export actions.
 - JWKS/IdP configuration is validated with a real issuer in a staging profile.
 - Load-test output is captured as a checked-in release report for the selected instance size.
+
+## Next PR Description - Staging Evidence And UI Framework Upgrade
+
+**Summary**
+Run the now-defined production gates against a real staging profile and, if still desired, replace the static admin shell with a full Refine application package.
+
+**Acceptance Criteria**
+- Live Postgres/Redis tests pass against staging and the k6 report is filled in with measured output.
+- JWKS config is validated with the production IdP issuer metadata.
+- Admin UI is promoted from static shell to package-managed Refine screens if product scope requires it.

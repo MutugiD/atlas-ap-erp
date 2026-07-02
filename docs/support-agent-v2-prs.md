@@ -136,14 +136,30 @@ Moves remaining partial items from static/source guarantees into live integratio
 **Summary**
 Turns the remaining deployment-specific edges into production rollout evidence and a fuller admin product surface.
 
-**Planned Changes**
+**Changes**
 - Add rolling-deployment and multi-replica SLO math for the selected AWS runtime.
-- Capture load-test output as a checked-in release report for a chosen instance size.
-- Add admin saved filters, loading/empty/error states, and CSV/JSON export actions.
-- Validate JWKS/IdP configuration against a staging issuer profile.
+- Add a checked-in load report template for a chosen instance size.
+- Add admin saved operator context, loading/error states, and CSV/JSON export actions.
+- Add a release-check script and CI gate for SLO/checklist/report assets.
 - Add release checklist for migrations, rollback, secrets rotation, and alert runbooks.
 
 **Acceptance Criteria**
 - Operations can use the repo to promote a release with clear rollback steps.
 - Admin users can inspect and export memory, audit, PII, and DLQ state from the UI.
 - Auth and load-test evidence are tied to a concrete staging profile.
+
+## PR 9 - Staging Evidence And UI Framework Upgrade
+
+**Summary**
+Executes the gates against staging and upgrades the static admin shell to a package-managed Refine app if the product scope still requires that framework.
+
+**Planned Changes**
+- Fill `reports/support-agent-v2-load-smoke.md` with real k6 output from staging.
+- Validate JWKS with the selected IdP issuer and audience.
+- Add Refine routes/components for explorer, graph, DLQ, PII, audit, and API-key views.
+- Add browser-based admin UI tests once the framework app is present.
+
+**Acceptance Criteria**
+- Staging evidence is checked in or attached to the release.
+- Refine admin screens cover every current admin endpoint.
+- Browser UI tests cover loading, error, export, and saved-context flows.

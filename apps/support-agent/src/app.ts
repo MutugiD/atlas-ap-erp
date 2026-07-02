@@ -330,6 +330,13 @@ function adminHtml() {
         <input id="principalId" value="operator" />
         <input id="userId" value="demo-user" />
       </div>
+      <div class="toolbar">
+        <button id="saveContext">Save Context</button>
+        <button id="loadContext">Load Saved</button>
+        <button id="exportJson">Export JSON</button>
+        <button id="exportCsv">Export CSV</button>
+      </div>
+      <p id="status" class="status">Ready</p>
       <nav>
         <button data-tab="explorer" class="active">Explorer</button>
         <button data-tab="graph">Graph</button>
@@ -357,6 +364,13 @@ function adminHtml() {
         "x-role": "admin"
       });
       const userId = () => encodeURIComponent(document.getElementById("userId").value);
+      let activeTab = "explorer";
+      let lastData = {};
+      const setStatus = (message, kind = "") => {
+        const status = document.getElementById("status");
+        status.textContent = message;
+        status.className = "status " + kind;
+      };
       const renderTable = (rows) => {
         if (!rows?.length) return "<p>No records.</p>";
         const keys = Object.keys(rows[0]);
@@ -372,24 +386,68 @@ function adminHtml() {
           audit: "/api/admin/audit",
           keys: "/api/admin/api-keys"
         };
-        const data = await fetch(routes[name], { headers: headers() }).then((res) => res.json());
+        try {
+        setStatus("Loading " + name + "...");
+        const data = await fetch(routes[name], { headers: headers() }).then((res) => {
+          if (!res.ok) throw new Error("Request failed with " + res.status);
+          return res.json();
+        });
+        activeTab = name;
+        lastData[name] = data;
         if (name === "explorer") document.getElementById("explorerOut").innerHTML = renderTable(data.facts ?? []);
         if (name === "graph") document.getElementById("graphOut").textContent = JSON.stringify(data, null, 2);
         if (name === "dlq") document.getElementById("dlqOut").innerHTML = renderTable(data.jobs ?? []);
         if (name === "pii") document.getElementById("piiOut").innerHTML = renderTable(data.redactions ?? []);
         if (name === "audit") document.getElementById("auditOut").innerHTML = renderTable(data.events ?? []);
         if (name === "keys") document.getElementById("keysOut").innerHTML = renderTable(data.apiKeys ?? []);
+        setStatus("Loaded " + name + ".");
+        } catch (error) {
+          setStatus(error.message, "error");
+        }
       };
       document.querySelectorAll("nav button").forEach((button) => button.addEventListener("click", () => {
         document.querySelectorAll("nav button, section").forEach((item) => item.classList.remove("active"));
         button.classList.add("active");
         document.getElementById(button.dataset.tab).classList.add("active");
+        activeTab = button.dataset.tab;
       }));
       document.querySelectorAll("[data-load]").forEach((button) => button.addEventListener("click", () => load(button.dataset.load)));
       document.getElementById("createKey").addEventListener("click", async () => {
         const data = await fetch("/api/admin/api-keys", { method: "POST", headers: headers(), body: JSON.stringify({ label: document.getElementById("keyLabel").value, role: document.getElementById("keyRole").value }) }).then((res) => res.json());
         document.getElementById("keySecret").textContent = JSON.stringify(data, null, 2);
         await load("keys");
+      });
+      document.getElementById("saveContext").addEventListener("click", () => {
+        localStorage.setItem("supportAdminContext", JSON.stringify({
+          apiKey: document.getElementById("apiKey").value,
+          orgId: document.getElementById("orgId").value,
+          principalId: document.getElementById("principalId").value,
+          userId: document.getElementById("userId").value
+        }));
+        setStatus("Saved operator context.");
+      });
+      document.getElementById("loadContext").addEventListener("click", () => {
+        const saved = JSON.parse(localStorage.getItem("supportAdminContext") || "{}");
+        for (const key of ["apiKey", "orgId", "principalId", "userId"]) if (saved[key]) document.getElementById(key).value = saved[key];
+        setStatus("Loaded saved operator context.");
+      });
+      const download = (name, text, type) => {
+        const blob = new Blob([text], { type });
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement("a");
+        anchor.href = url;
+        anchor.download = name;
+        anchor.click();
+        URL.revokeObjectURL(url);
+      };
+      document.getElementById("exportJson").addEventListener("click", () => download("support-" + activeTab + ".json", JSON.stringify(lastData[activeTab] ?? {}, null, 2), "application/json"));
+      document.getElementById("exportCsv").addEventListener("click", () => {
+        const data = lastData[activeTab] ?? {};
+        const rows = data.facts ?? data.jobs ?? data.redactions ?? data.events ?? data.apiKeys ?? [];
+        if (!rows.length) return setStatus("No rows to export.", "error");
+        const keys = Object.keys(rows[0]);
+        const csv = [keys.join(","), ...rows.map((row) => keys.map((key) => JSON.stringify(row[key] ?? "")).join(","))].join("\\n");
+        download("support-" + activeTab + ".csv", csv, "text/csv");
       });
     </script>
   </body>

@@ -13,6 +13,7 @@ describe("Support Agent V2 release gates", () => {
     for (const command of [
       "bun install --frozen-lockfile",
       "bun run license:audit",
+      "bun run release:check",
       "bun test",
       "bun run test:live-support",
       "bun run typecheck",
@@ -71,5 +72,17 @@ describe("Support Agent V2 release gates", () => {
   test("license audit script is committed and runnable source exists", () => {
     expect(existsSync("scripts/license-audit.ts")).toBe(true);
     expect(readFileSync("scripts/license-audit.ts", "utf8")).toContain("license audit passed");
+  });
+
+  test("production release SLO, checklist, and release check are committed", () => {
+    const slo = readFileSync("docs/support-agent-v2-slo.md", "utf8");
+    const checklist = readFileSync("docs/support-agent-v2-release-checklist.md", "utf8");
+    const report = readFileSync("reports/support-agent-v2-load-smoke.md", "utf8");
+    const releaseCheck = readFileSync("scripts/support-release-check.ts", "utf8");
+    expect(slo).toContain("99.5%");
+    expect(slo).toContain("216 minutes");
+    expect(checklist).toContain("Rollback Triggers");
+    expect(report).toContain("p95 < 400ms");
+    expect(releaseCheck).toContain("support release check passed");
   });
 });

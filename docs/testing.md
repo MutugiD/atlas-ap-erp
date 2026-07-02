@@ -6,6 +6,7 @@ Run:
 bun.cmd test
 bun.cmd run typecheck
 bun.cmd run license:audit
+bun.cmd run release:check
 bun.cmd --filter @atlas/support-agent build
 bun.cmd --filter @atlas/web build
 bun.cmd run infra:synth

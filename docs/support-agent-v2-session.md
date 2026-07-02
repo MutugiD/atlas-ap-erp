@@ -17,6 +17,7 @@ P0 native core:
 - Release gates now include Apache-2.0 license/NOTICE, dependency license audit, CI workflow, Grafana dashboard, Prometheus alert rules, k6 load smoke, and observability scrubber/tracing seams.
 - Live integration harness now covers Postgres app-role RLS and Redis/BullMQ worker ingestion behind `bun.cmd run test:live-support`.
 - Chat write degradation now buffers failed queue writes and returns `degraded: true` instead of blocking the reply.
+- Production release posture now includes SLO math, rollout/rollback checklist, checked-in load report template, and `bun.cmd run release:check`.
 - The spec is translated into `docs/support-agent-v2-feature-backlog.md`, which tracks FR/NFR status and the next PR stack.
 
 ## Runtime Shape
