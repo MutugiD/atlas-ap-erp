@@ -12,6 +12,15 @@ bun.cmd run infra:synth
 docker compose config --quiet
 ```
 
+Live Support Agent integration:
+
+```powershell
+docker compose up -d postgres redis
+$env:DATABASE_URL="postgresql://atlas_owner:atlas_owner@localhost:5432/atlas_ap"
+$env:REDIS_URL="redis://localhost:6379"
+bun.cmd run test:live-support
+```
+
 The test suite covers:
 
 - Lifecycle reducer safety.
@@ -26,6 +35,7 @@ The test suite covers:
 - Infrastructure source checks.
 - Support Agent V2 admin/operator workflows.
 - Support Agent V2 observability, compliance, CI, license, and load-smoke release gates.
+- Optional live Postgres RLS and Redis/BullMQ integration when services are available.
 
 Load smoke:
 

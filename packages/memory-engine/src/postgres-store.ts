@@ -133,6 +133,7 @@ export class PostgresNativeStore implements MemoryStore {
   async retrieve(input: { orgId: string; userId: string; query?: string }) {
     const client = await this.pool.connect();
     try {
+      await client.query("begin");
       await this.scopeOrg(client, input.orgId);
       const result = await client.query(
         "select * from support_facts where org_id = $1 and user_id = $2 and status = 'active' order by slot_key asc",
@@ -143,12 +144,17 @@ export class PostgresNativeStore implements MemoryStore {
         const queryEmbedding = await this.embedder.embed(input.query);
         facts = facts.sort((a, b) => cosine(b.embedding, queryEmbedding) - cosine(a.embedding, queryEmbedding));
       }
-      return {
+      const context = {
         orgId: input.orgId,
         userId: input.userId,
         facts,
         contextPrompt: tokenBudget(facts.map((fact) => fact.canonicalText).join("\n")),
       };
+      await client.query("commit");
+      return context;
+    } catch (error) {
+      await client.query("rollback");
+      throw error;
     } finally {
       client.release();
     }
@@ -157,13 +163,19 @@ export class PostgresNativeStore implements MemoryStore {
   async getFact(input: { orgId: string; userId: string; factId: string }) {
     const client = await this.pool.connect();
     try {
+      await client.query("begin");
       await this.scopeOrg(client, input.orgId);
       const result = await client.query("select * from support_facts where org_id = $1 and user_id = $2 and id = $3 limit 1", [
         input.orgId,
         input.userId,
         input.factId,
       ]);
-      return result.rows[0] ? rowToFact(result.rows[0]) : null;
+      const fact = result.rows[0] ? rowToFact(result.rows[0]) : null;
+      await client.query("commit");
+      return fact;
+    } catch (error) {
+      await client.query("rollback");
+      throw error;
     } finally {
       client.release();
     }
@@ -172,13 +184,19 @@ export class PostgresNativeStore implements MemoryStore {
   async timeline(input: { orgId: string; userId: string }): Promise<TimelineEntry[]> {
     const client = await this.pool.connect();
     try {
+      await client.query("begin");
       await this.scopeOrg(client, input.orgId);
       const result = await client.query("select * from support_facts where org_id = $1 and user_id = $2 order by created_at asc", [
         input.orgId,
         input.userId,
       ]);
       const facts = result.rows.map(rowToFact);
-      return facts.map((fact) => ({ ...fact, replacedBy: facts.find((candidate) => candidate.supersedes === fact.id)?.id }));
+      const timeline = facts.map((fact) => ({ ...fact, replacedBy: facts.find((candidate) => candidate.supersedes === fact.id)?.id }));
+      await client.query("commit");
+      return timeline;
+    } catch (error) {
+      await client.query("rollback");
+      throw error;
     } finally {
       client.release();
     }
@@ -187,13 +205,20 @@ export class PostgresNativeStore implements MemoryStore {
   async richTimeline(input: { orgId: string; userId: string }): Promise<RichTimeline> {
     const client = await this.pool.connect();
     try {
+      await client.query("begin");
       await this.scopeOrg(client, input.orgId);
-      const [facts, episodes, artifacts] = await Promise.all([
-        this.timeline(input),
+      const [factsResult, episodes, artifacts] = await Promise.all([
+        client.query("select * from support_facts where org_id = $1 and user_id = $2 order by created_at asc", [input.orgId, input.userId]),
         client.query("select * from support_episodes where org_id = $1 and user_id = $2 order by created_at asc", [input.orgId, input.userId]),
         client.query("select * from support_artifacts where org_id = $1 and user_id = $2 order by created_at asc", [input.orgId, input.userId]),
       ]);
+      const factRows = factsResult.rows.map(rowToFact);
+      const facts = factRows.map((fact) => ({ ...fact, replacedBy: factRows.find((candidate) => candidate.supersedes === fact.id)?.id }));
+      await client.query("commit");
       return { facts, episodes: episodes.rows.map(rowToEpisode), artifacts: artifacts.rows.map(rowToArtifact) };
+    } catch (error) {
+      await client.query("rollback");
+      throw error;
     } finally {
       client.release();
     }
@@ -203,19 +228,27 @@ export class PostgresNativeStore implements MemoryStore {
     if (input.type === "fact") return this.timeline(input);
     const client = await this.pool.connect();
     try {
+      await client.query("begin");
       await this.scopeOrg(client, input.orgId);
       if (input.type === "episode") {
         const result = await client.query("select * from support_episodes where org_id = $1 and user_id = $2 order by created_at asc", [
           input.orgId,
           input.userId,
         ]);
-        return result.rows.map(rowToEpisode);
+        const episodes = result.rows.map(rowToEpisode);
+        await client.query("commit");
+        return episodes;
       }
       const result = await client.query("select * from support_artifacts where org_id = $1 and user_id = $2 order by created_at asc", [
         input.orgId,
         input.userId,
       ]);
-      return result.rows.map(rowToArtifact);
+      const artifacts = result.rows.map(rowToArtifact);
+      await client.query("commit");
+      return artifacts;
+    } catch (error) {
+      await client.query("rollback");
+      throw error;
     } finally {
       client.release();
     }
@@ -312,4 +345,3 @@ function rowToArtifact(row: Record<string, unknown>): Artifact {
     createdAt: new Date(row.created_at as string).toISOString(),
   };
 }
-

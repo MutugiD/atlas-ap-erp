@@ -29,7 +29,10 @@ describe("Support Agent V2 API and RLS", () => {
     expect(artifacts.json().items.length).toBeGreaterThan(0);
 
     expect((await app.inject({ method: "GET", url: "/metrics" })).statusCode).toBe(200);
-    expect((await app.inject({ method: "GET", url: "/admin", headers })).body).toContain("Support Agent V2 Admin");
+    const admin = await app.inject({ method: "GET", url: "/admin", headers });
+    expect(admin.body).toContain("Support Agent V2 Admin");
+    expect(admin.body).toContain("data-tab=\"explorer\"");
+    expect(admin.body).toContain("data-load=\"dlq\"");
 
     const reset = await app.inject({ method: "DELETE", url: "/api/memory/api-user", headers });
     expect(reset.json().ok).toBe(true);
@@ -41,6 +44,8 @@ describe("Support Agent V2 API and RLS", () => {
     expect(migration).toContain("CREATE EXTENSION IF NOT EXISTS vector");
     expect(migration).toContain("support_one_active_per_slot");
     expect(migration).toContain("support_uniq_content");
+    expect(migration).toContain("CREATE ROLE support_app_user LOGIN");
+    expect(migration).toContain("FORCE ROW LEVEL SECURITY");
     for (const table of ["support_users", "support_facts", "support_episodes", "support_artifacts", "support_audit_logs", "support_api_keys", "support_ingest_jobs"]) {
       expect(migration).toContain(`ALTER TABLE ${table} ENABLE ROW LEVEL SECURITY`);
       expect(migration).toContain(`CREATE POLICY org_isolation ON ${table}`);
@@ -48,4 +53,3 @@ describe("Support Agent V2 API and RLS", () => {
     expect(setOrgSql("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")).toContain("set_config('app.org_id'");
   });
 });
-

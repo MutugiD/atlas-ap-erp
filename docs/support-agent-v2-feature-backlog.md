@@ -31,14 +31,14 @@ This backlog translates `Support-Agent-V2-Technical-Spec.md` into implementable 
 | Spec ID | Feature | PR | Status | Acceptance Criteria |
 |---|---|---:|---|---|
 | NFR-1 | p95 latency targets | PR 6 | Done | k6 smoke includes p95 threshold for the deterministic local path. |
-| NFR-2 | Durable async writes | PR 4 | Partial | BullMQ queue/worker/DLQ implemented; next step runs integration against live Redis. |
+| NFR-2 | Durable async writes | PR 4/7 | Done | BullMQ queue/worker/DLQ implemented; live Redis worker test is available in CI/service-container harness. |
 | NFR-3 | 99.5% availability posture | PR 6 | Partial | Health probes, readiness metrics, and alerts exist; deployment topology docs still need environment-specific SLO math. |
 | NFR-4 | >=50 req/s per replica | PR 6 | Done | k6 load scenario targets 50 req/s with p95 threshold. |
-| NFR-5 | Cross-tenant leak test | PR 3/4 | Partial | RLS migration and local isolation tests done; next step adds live Postgres RLS test. |
+| NFR-5 | Cross-tenant leak test | PR 3/4/7 | Done | RLS migration, local isolation, and live Postgres app-role RLS harness exist. |
 | NFR-6 | Duplicate retry produces zero new facts | PR 1/4 | Done | Replay tests cover in-memory; DB store uses unique `content_hash`. |
 | NFR-7 | $0 external memory/mandatory LLM | PR 1 | Done | Native engine and deterministic template path are default. |
 | NFR-8 | Correlation IDs and traces | PR 4/6 | Partial | Fastify request IDs, Pino redaction, and tracing seam implemented; full OTel exporter remains deployment-specific. |
-| NFR-9 | Queue outage degradation | PR 4/6 | Partial | DLQ/operator alerting exists; fallback buffer and live Redis failure tests remain. |
+| NFR-9 | Queue outage degradation | PR 4/6/7 | Done | DLQ/operator alerting and degrading queue buffer exist; chat replies survive queue failures. |
 | NFR-10 | Startup readiness gated on model/DB/Redis | PR 4/6 | Partial | Readiness reports store/Redis/model status and emits failure metrics; live DB/Redis gating tests planned. |
 
 ## Current PR Stack
@@ -49,7 +49,7 @@ This backlog translates `Support-Agent-V2-Technical-Spec.md` into implementable 
 4. `Done/Partial`: Postgres store, BullMQ queue/worker/DLQ, JWT/API-key auth, rate limit, helmet, Pino.
 5. `Partial`: Admin/operator APIs, RBAC, graph data, DLQ replay, API-key lifecycle, PII review, audit trail.
 6. `Done/Partial`: Observability seam, Sentry scrubber shape, Grafana dashboard, alerts, load smoke, license audit, and CI image gates.
-7. `Next`: Live Postgres/Redis integration harness and Refine admin polish.
+7. `Done/Partial`: Live Postgres/Redis integration harness, degrading queue buffer, JWKS discovery seam, and richer admin shell.
 
 ## PR Description - Admin And Operator Workflows
 
@@ -77,7 +77,7 @@ Complete release readiness with tracing seams, Sentry scrubber shape, Grafana da
 - Apache-2.0 `LICENSE`, `NOTICE`, and dependency/model license audit script exist.
 - CI workflow runs install, typecheck, tests, builds, migration checks, Docker build, and license audit.
 
-## Next PR Description - Live Integration Harness And Refine Admin Polish
+## PR Description - Live Integration Harness And Refine Admin Polish
 
 **Summary**
 Move the remaining partial items from source-level enterprise seams to live integration checks and a richer operator UI.
@@ -87,3 +87,14 @@ Move the remaining partial items from source-level enterprise seams to live inte
 - Queue outage fallback and memory degradation are covered by failure-injection tests.
 - Refine admin shell renders explorer, graph, DLQ, PII, audit, and API-key workflows with route-level RBAC.
 - JWKS discovery and external IdP role mapping are configurable.
+
+## Next PR Description - Production Deployment SLO And Admin Productization
+
+**Summary**
+Convert the remaining deployment-specific partials into final production posture.
+
+**Acceptance Criteria**
+- Rolling deployment and multi-replica SLO math is documented for the target AWS runtime.
+- Admin UI has production routing, saved filters, empty/loading/error states, and export actions.
+- JWKS/IdP configuration is validated with a real issuer in a staging profile.
+- Load-test output is captured as a checked-in release report for the selected instance size.

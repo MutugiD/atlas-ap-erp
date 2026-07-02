@@ -9,6 +9,29 @@ on:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: atlas_owner
+          POSTGRES_PASSWORD: atlas_owner
+          POSTGRES_DB: atlas_ap
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U atlas_owner -d atlas_ap"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
@@ -20,6 +43,11 @@ jobs:
         run: bun run license:audit
       - name: Test
         run: bun test
+      - name: Live Support Agent integration
+        run: bun run test:live-support
+        env:
+          DATABASE_URL: postgresql://atlas_owner:atlas_owner@localhost:5432/atlas_ap
+          REDIS_URL: redis://localhost:6379
       - name: Typecheck
         run: bun run typecheck
       - name: Support Agent build

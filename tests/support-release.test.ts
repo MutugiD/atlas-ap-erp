@@ -14,6 +14,7 @@ describe("Support Agent V2 release gates", () => {
       "bun install --frozen-lockfile",
       "bun run license:audit",
       "bun test",
+      "bun run test:live-support",
       "bun run typecheck",
       "bun --filter @atlas/support-agent build",
       "bun --filter @atlas/web build",
@@ -56,6 +57,15 @@ describe("Support Agent V2 release gates", () => {
     for (const span of ["support.chat", "memory.retrieve", "memory.enqueue"]) {
       expect(app).toContain(span);
     }
+  });
+
+  test("live integration harness and Windows-safe runner are committed", () => {
+    const live = readFileSync("tests/support-live.test.ts", "utf8");
+    const runner = readFileSync("scripts/run-live-support-tests.ts", "utf8");
+    expect(live).toContain("RUN_LIVE_SUPPORT_TESTS");
+    expect(live).toContain("Postgres app role enforces RLS");
+    expect(live).toContain("Redis BullMQ worker");
+    expect(runner).toContain("process.execPath");
   });
 
   test("license audit script is committed and runnable source exists", () => {

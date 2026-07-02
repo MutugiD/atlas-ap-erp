@@ -1,6 +1,6 @@
 CREATE EXTENSION IF NOT EXISTS vector;
 
-CREATE ROLE support_app_user NOLOGIN;
+CREATE ROLE support_app_user LOGIN PASSWORD 'support_app_user';
 
 CREATE TABLE support_orgs (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -103,6 +103,14 @@ ALTER TABLE support_audit_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE support_api_keys ENABLE ROW LEVEL SECURITY;
 ALTER TABLE support_ingest_jobs ENABLE ROW LEVEL SECURITY;
 
+ALTER TABLE support_users FORCE ROW LEVEL SECURITY;
+ALTER TABLE support_facts FORCE ROW LEVEL SECURITY;
+ALTER TABLE support_episodes FORCE ROW LEVEL SECURITY;
+ALTER TABLE support_artifacts FORCE ROW LEVEL SECURITY;
+ALTER TABLE support_audit_logs FORCE ROW LEVEL SECURITY;
+ALTER TABLE support_api_keys FORCE ROW LEVEL SECURITY;
+ALTER TABLE support_ingest_jobs FORCE ROW LEVEL SECURITY;
+
 CREATE POLICY org_isolation ON support_users
   AS PERMISSIVE FOR ALL TO support_app_user
   USING (org_id = current_setting('app.org_id', true)::uuid)
@@ -138,5 +146,5 @@ CREATE POLICY org_isolation ON support_ingest_jobs
   USING (org_id = current_setting('app.org_id', true)::uuid)
   WITH CHECK (org_id = current_setting('app.org_id', true)::uuid);
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON support_users, support_facts, support_episodes, support_artifacts, support_audit_logs, support_api_keys, support_ingest_jobs TO support_app_user;
-
+GRANT SELECT, INSERT, UPDATE, DELETE ON support_orgs, support_users, support_facts, support_episodes, support_artifacts, support_audit_logs, support_api_keys, support_ingest_jobs TO support_app_user;
+GRANT REFERENCES ON support_orgs, support_facts TO support_app_user;

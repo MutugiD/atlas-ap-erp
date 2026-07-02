@@ -15,6 +15,8 @@ P0 native core:
 - Production adapters now include `PostgresNativeStore`, BullMQ queue/worker role, JWT/API-key auth paths, secure headers, per-tenant rate limiting, and structured logging.
 - Operator workflows now include admin-only explorer, supersession graph data, PII review, audit log, DLQ replay, and API-key lifecycle routes.
 - Release gates now include Apache-2.0 license/NOTICE, dependency license audit, CI workflow, Grafana dashboard, Prometheus alert rules, k6 load smoke, and observability scrubber/tracing seams.
+- Live integration harness now covers Postgres app-role RLS and Redis/BullMQ worker ingestion behind `bun.cmd run test:live-support`.
+- Chat write degradation now buffers failed queue writes and returns `degraded: true` instead of blocking the reply.
 - The spec is translated into `docs/support-agent-v2-feature-backlog.md`, which tracks FR/NFR status and the next PR stack.
 
 ## Runtime Shape
@@ -44,6 +46,6 @@ flowchart LR
 ## Next Enterprise Hardening
 
 - Replace the static admin shell with a fuller Refine UI.
-- Run live Postgres RLS and Redis BullMQ integration suites in CI service containers.
-- Add JWKS provider discovery and external IdP role mapping.
+- Run deployment-specific SLO math and rolling-update validation.
+- Wire JWKS provider discovery to the chosen production IdP metadata endpoint.
 - Convert the dependency-free tracing seam to full OpenTelemetry export when the deployment target is selected.

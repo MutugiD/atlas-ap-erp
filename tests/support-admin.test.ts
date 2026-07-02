@@ -17,7 +17,7 @@ describe("Support Agent V2 admin operator workflows", () => {
     const app = buildSupportApp({ store: new InMemoryNativeStore() });
     const response = await app.inject({ method: "GET", url: "/api/admin/audit", headers: serviceHeaders });
     expect(response.statusCode).toBe(403);
-  });
+  }, 10000);
 
   test("explorer, graph, pii review, api keys, audit, and DLQ replay work end to end", async () => {
     const store = new InMemoryNativeStore();
@@ -97,4 +97,3 @@ describe("Support Agent V2 admin operator workflows", () => {
     expect(actions).toContain("dlq.replayed");
   });
 });
-

@@ -8,6 +8,12 @@ export interface IngestQueue {
   dlqDepth(): Promise<number>;
 }
 
+export interface BufferedFailure {
+  input: IngestInput;
+  error: string;
+  failedAt: string;
+}
+
 export class LocalIngestQueue implements IngestQueue {
   constructor(private readonly store: MemoryStore) {}
 
@@ -59,7 +65,7 @@ export class BullMqIngestQueue implements IngestQueue {
   }
 
   async enqueue(input: IngestInput): Promise<IngestResult> {
-    const id = `${input.orgId}:${input.userId}:${input.convId}:${await hashMessage(input.message)}`;
+    const id = `support-${await hashMessage([input.orgId, input.userId, input.convId, input.message].join("|"))}`;
     await this.queue.add("ingest-turn", input, { jobId: id });
     return { queued: true, inserted: 0, superseded: 0, duplicate: 0, factIds: [] };
   }
@@ -76,6 +82,45 @@ export class BullMqIngestQueue implements IngestQueue {
     await this.worker?.close();
     await this.queue.close();
     await this.dlq.close();
+  }
+}
+
+export class DegradingIngestQueue implements IngestQueue {
+  private readonly buffer: BufferedFailure[] = [];
+
+  constructor(private readonly primary: IngestQueue) {}
+
+  async enqueue(input: IngestInput): Promise<IngestResult> {
+    try {
+      return await this.primary.enqueue(input);
+    } catch (error) {
+      this.buffer.push({
+        input,
+        error: error instanceof Error ? error.message : String(error),
+        failedAt: new Date().toISOString(),
+      });
+      return { queued: false, inserted: 0, superseded: 0, duplicate: 0, factIds: [] };
+    }
+  }
+
+  async depth() {
+    try {
+      return (await this.primary.depth()) + this.buffer.length;
+    } catch {
+      return this.buffer.length;
+    }
+  }
+
+  async dlqDepth() {
+    try {
+      return (await this.primary.dlqDepth()) + this.buffer.length;
+    } catch {
+      return this.buffer.length;
+    }
+  }
+
+  bufferedFailures() {
+    return [...this.buffer];
   }
 }
 

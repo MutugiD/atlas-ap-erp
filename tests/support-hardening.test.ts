@@ -63,6 +63,7 @@ describe("Support Agent V2 production hardening", () => {
     expect(source).toContain("new Worker(");
     expect(source).toContain("support-agent-ingest-dlq");
     expect(source).toContain("jobId");
+    expect(source).toContain("support-${await hashMessage");
   });
 
   test("PR backlog has concrete enterprise follow-up PRs", () => {

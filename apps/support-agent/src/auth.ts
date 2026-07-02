@@ -1,6 +1,6 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { orgContextSchema, type OrgContext } from "@atlas/support-contracts";
-import { jwtVerify } from "jose";
+import { createRemoteJWKSet, jwtVerify } from "jose";
 
 declare module "fastify" {
   interface FastifyRequest {
@@ -24,6 +24,21 @@ export async function authenticate(request: FastifyRequest, reply: FastifyReply)
   if (process.env.AUTH_JWT_SECRET && auth?.startsWith("Bearer ")) {
     const secret = new TextEncoder().encode(process.env.AUTH_JWT_SECRET);
     const { payload } = await jwtVerify(auth.slice("Bearer ".length), secret);
+    request.org = orgContextSchema.parse({
+      orgId: payload.org_id,
+      principalId: payload.sub,
+      role: payload.role ?? "agent",
+      authType: "jwt",
+    });
+    return;
+  }
+
+  if (process.env.AUTH_JWKS_URL && auth?.startsWith("Bearer ")) {
+    const jwks = createRemoteJWKSet(new URL(process.env.AUTH_JWKS_URL));
+    const { payload } = await jwtVerify(auth.slice("Bearer ".length), jwks, {
+      audience: process.env.AUTH_JWT_AUDIENCE,
+      issuer: process.env.AUTH_JWT_ISSUER,
+    });
     request.org = orgContextSchema.parse({
       orgId: payload.org_id,
       principalId: payload.sub,

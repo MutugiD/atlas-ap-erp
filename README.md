@@ -74,3 +74,12 @@ Support Agent V2 adds a native belief-revision memory engine: deterministic fact
 - `ops/grafana/support-agent-dashboard.json` covers request rate, p95 latency, ingest results, context reuse, queue depth, DLQ depth, and readiness failures.
 - `ops/alerts/support-agent-alerts.yml` covers high latency, DLQ backlog, queue backlog, readiness failure, and low memory-context reuse.
 - `tests/load/support-agent-k6.js` is the k6 smoke target for 50 req/s and p95 under 400ms.
+
+Live Support Agent integration:
+
+```powershell
+docker compose up -d postgres redis
+$env:DATABASE_URL="postgresql://atlas_owner:atlas_owner@localhost:5432/atlas_ap"
+$env:REDIS_URL="redis://localhost:6379"
+bun.cmd run test:live-support
+```

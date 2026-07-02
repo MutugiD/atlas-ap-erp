@@ -111,21 +111,39 @@ Completes enterprise release readiness with operational evidence and repository 
 - CI workflow gate check.
 - Dashboard, alerts, and load-smoke threshold checks.
 
-## PR 7 - Live Integration Harness And Refine Admin Polish
+## PR 7 - Live Integration Harness, Degradation, And Admin Polish
 
 **Summary**
-Moves remaining partial items from static/source guarantees into live integration checks and richer operator workflows.
+Moves remaining partial items from static/source guarantees into live integration checks, graceful write degradation, JWKS auth configuration, and richer operator workflows.
 
-**Planned Changes**
+**Changes**
 - Add CI service containers for Postgres pgvector and Redis.
 - Add live RLS test proving org A cannot read org B through the real app role.
-- Add BullMQ enqueue, retry, and DLQ replay integration test against live Redis.
+- Add BullMQ enqueue and worker ingestion integration test against live Redis.
 - Add queue outage fallback/failure-injection tests.
-- Replace the static HTML shell with Refine admin screens for explorer, graph, DLQ, PII, audit, and API keys.
-- Add JWKS discovery and external IdP role mapping.
+- Replace the endpoint-note admin shell with a browser UI for explorer, graph, DLQ, PII, audit, and API keys.
+- Add JWKS discovery configuration through `AUTH_JWKS_URL`, `AUTH_JWT_AUDIENCE`, and `AUTH_JWT_ISSUER`.
+- Fix BullMQ custom job IDs to avoid delimiter characters rejected by BullMQ.
 
 **Acceptance Criteria**
 - Live Postgres and Redis suites can run locally and in CI.
 - Failure-injection tests prove memory errors never block a chat reply.
 - Admin UI is usable without direct API crafting.
 - Auth configuration supports production IdP integration.
+
+## PR 8 - Production Deployment SLO And Admin Productization
+
+**Summary**
+Turns the remaining deployment-specific edges into production rollout evidence and a fuller admin product surface.
+
+**Planned Changes**
+- Add rolling-deployment and multi-replica SLO math for the selected AWS runtime.
+- Capture load-test output as a checked-in release report for a chosen instance size.
+- Add admin saved filters, loading/empty/error states, and CSV/JSON export actions.
+- Validate JWKS/IdP configuration against a staging issuer profile.
+- Add release checklist for migrations, rollback, secrets rotation, and alert runbooks.
+
+**Acceptance Criteria**
+- Operations can use the repo to promote a release with clear rollback steps.
+- Admin users can inspect and export memory, audit, PII, and DLQ state from the UI.
+- Auth and load-test evidence are tied to a concrete staging profile.
