@@ -51,6 +51,27 @@ describeLive("Atlas AP live Postgres persistence", () => {
     await appPool.end();
   });
 
+  test("vendors are tenant-isolated and a payment hold excludes the invoice", async () => {
+    const appPool = await freshSchema();
+    const repo = new PostgresInvoiceRepository({ pool: appPool });
+
+    const heldVendor = await repo.createVendor(ctxA, { name: "Held", currency: "USD", active: true, holdPayments: true, paymentTermsDays: 30, defaultExpenseAccount: "6100" });
+
+    // Vendor master is tenant-scoped: B cannot see A's vendor.
+    expect(await repo.getVendor(ctxB, heldVendor.id)).toBeUndefined();
+    expect(await repo.listVendors(ctxB)).toHaveLength(0);
+
+    const { invoice } = await repo.createInvoice(ctxA, { invoiceNumber: "V-HOLD", total: 400, currency: "USD", vendorId: heldVendor.id });
+    expect(invoice.vendorId).toBe(heldVendor.id);
+    await repo.updateInvoice(ctxA, { ...invoice, status: "queued_for_payment" });
+
+    const run = await repo.createPaymentRun(ctxA, "2099-12-31");
+    expect(run.payments).toHaveLength(0);
+    expect(run.excluded.some((e) => e.invoiceId === invoice.id && e.reason === "Vendor payment hold")).toBe(true);
+
+    await appPool.end();
+  });
+
   test("posting transition persists a balanced invoice_posting journal", async () => {
     const appPool = await freshSchema();
     const repo = new PostgresInvoiceRepository({ pool: appPool });
@@ -79,6 +100,7 @@ async function freshSchema(): Promise<Pool> {
   `);
   await owner.query(readFileSync("packages/db/migrations/0000_initial_rls.sql", "utf8"));
   await owner.query(readFileSync("packages/db/migrations/0001_api_app_role.sql", "utf8"));
+  await owner.query(readFileSync("packages/db/migrations/0002_vendor_master.sql", "utf8"));
   await owner.query("insert into tenants (id, name) values ($1, $2), ($3, $4)", [tenantA, "Tenant A", tenantB, "Tenant B"]);
   await owner.end();
   return new Pool({ connectionString: appRoleUrl(ownerUrl) });

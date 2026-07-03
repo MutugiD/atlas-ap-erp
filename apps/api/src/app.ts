@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { createInvoiceSchema } from "@atlas/contracts";
+import { createInvoiceSchema, createVendorSchema, updateVendorSchema } from "@atlas/contracts";
 import { Supervisor } from "@atlas/agents";
 import { repository } from "./repository";
 import { withTenant } from "./tenant";
@@ -79,6 +79,23 @@ v1.get("/accounting/aging", async (c) => {
 v1.post("/accounting/fx-realizations", async (c) => {
   const body = await c.req.json();
   return c.json({ result: await repository.realizeFx(c.get("tenant"), body) });
+});
+
+v1.post("/vendors", async (c) => {
+  const input = createVendorSchema.parse(await c.req.json());
+  return c.json({ vendor: await repository.createVendor(c.get("tenant"), input) }, 201);
+});
+
+v1.get("/vendors", async (c) => c.json({ vendors: await repository.listVendors(c.get("tenant")) }));
+
+v1.get("/vendors/:id", async (c) => {
+  const vendor = await repository.getVendor(c.get("tenant"), c.req.param("id"));
+  return vendor ? c.json({ vendor }) : c.notFound();
+});
+
+v1.patch("/vendors/:id", async (c) => {
+  const patch = updateVendorSchema.parse(await c.req.json());
+  return c.json({ vendor: await repository.updateVendor(c.get("tenant"), c.req.param("id"), patch) });
 });
 
 v1.post("/webhooks/email-inbound", async (c) => {

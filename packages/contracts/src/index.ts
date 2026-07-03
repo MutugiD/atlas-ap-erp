@@ -144,8 +144,38 @@ export const createInvoiceSchema = z.object({
   total: z.number().nonnegative().default(0),
   currency: z.string().length(3).default("USD"),
   poId: uuidSchema.optional(),
+  vendorId: uuidSchema.optional(),
 });
 export type CreateInvoiceInput = z.infer<typeof createInvoiceSchema>;
+
+export const vendorSchema = z.object({
+  id: uuidSchema,
+  tenantId: uuidSchema,
+  name: z.string(),
+  taxId: z.string().optional(),
+  active: z.boolean(),
+  holdPayments: z.boolean(),
+  paymentTermsDays: z.number().int().nonnegative(),
+  defaultExpenseAccount: z.string(),
+  currency: z.string().length(3),
+  createdAt: z.string(),
+});
+export type Vendor = z.infer<typeof vendorSchema>;
+
+export const createVendorSchema = z.object({
+  name: z.string().min(1),
+  taxId: z.string().optional(),
+  active: z.boolean().default(true),
+  holdPayments: z.boolean().default(false),
+  paymentTermsDays: z.number().int().nonnegative().default(30),
+  defaultExpenseAccount: z.string().default("6100"),
+  currency: z.string().length(3).default("USD"),
+});
+export type CreateVendorInput = z.infer<typeof createVendorSchema>;
+
+// All fields optional — a partial update of an existing vendor.
+export const updateVendorSchema = createVendorSchema.partial();
+export type UpdateVendorInput = z.infer<typeof updateVendorSchema>;
 
 export const transitionSchema = z.object({
   from: invoiceStatusSchema,
