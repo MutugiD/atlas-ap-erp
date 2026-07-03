@@ -335,6 +335,19 @@ export const profitabilityComputeSchema = z.object({
 });
 export type ProfitabilityComputeInput = z.infer<typeof profitabilityComputeSchema>;
 
+// A generated report artifact persists the same compute request plus the
+// resulting executive summary and full detail (stored as JSON).
+export const profitabilityReportRecordSchema = z.object({
+  id: uuidSchema,
+  tenantId: uuidSchema,
+  period: z.string(),
+  priorPeriod: z.string().optional(),
+  summary: z.unknown(),
+  detail: z.unknown(),
+  generatedAt: z.string(),
+});
+export type ProfitabilityReportRecord = z.infer<typeof profitabilityReportRecordSchema>;
+
 export const transitionSchema = z.object({
   from: invoiceStatusSchema,
   to: invoiceStatusSchema,

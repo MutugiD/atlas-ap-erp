@@ -134,6 +134,50 @@ function attachTrend(current: Rollup[], prior?: Rollup[]): RollupWithTrend[] {
   });
 }
 
+// --- executive summary ---------------------------------------------------
+
+export interface StatusCounts {
+  green: number;
+  yellow: number;
+  red: number;
+}
+
+export interface ExecutiveSummary {
+  total: Margins;
+  accountStatusCounts: StatusCounts;
+  serviceLineStatusCounts: StatusCounts;
+  bestAccount?: { key: string; netMargin: Money; netMarginPct: number };
+  worstAccount?: { key: string; netMargin: Money; netMarginPct: number };
+  biggestGain?: { key: string; netMarginDelta: Money };
+  biggestDrop?: { key: string; netMarginDelta: Money };
+}
+
+// Roll a report (and optional trend) into an at-a-glance executive summary.
+export function summarize(report: ProfitabilityReport, trend?: ReportWithTrend): ExecutiveSummary {
+  const ranked = [...report.byAccount].sort((a, b) => b.netMargin - a.netMargin);
+  const movers = (trend?.byAccount ?? []).filter((r) => r.netMarginDelta !== undefined);
+  const byDelta = [...movers].sort((a, b) => (b.netMarginDelta ?? 0) - (a.netMarginDelta ?? 0));
+  const gain = byDelta[0];
+  const drop = byDelta[byDelta.length - 1];
+  return {
+    total: report.total,
+    accountStatusCounts: countStatuses(report.byAccount),
+    serviceLineStatusCounts: countStatuses(report.byServiceLine),
+    bestAccount: ranked[0] ? { key: ranked[0].key, netMargin: ranked[0].netMargin, netMarginPct: ranked[0].netMarginPct } : undefined,
+    worstAccount: ranked.length ? { key: ranked[ranked.length - 1].key, netMargin: ranked[ranked.length - 1].netMargin, netMarginPct: ranked[ranked.length - 1].netMarginPct } : undefined,
+    biggestGain: gain && (gain.netMarginDelta ?? 0) > 0 ? { key: gain.key, netMarginDelta: gain.netMarginDelta ?? 0 } : undefined,
+    biggestDrop: drop && (drop.netMarginDelta ?? 0) < 0 ? { key: drop.key, netMarginDelta: drop.netMarginDelta ?? 0 } : undefined,
+  };
+}
+
+function countStatuses(rollups: Rollup[]): StatusCounts {
+  return {
+    green: rollups.filter((r) => r.status === "green").length,
+    yellow: rollups.filter((r) => r.status === "yellow").length,
+    red: rollups.filter((r) => r.status === "red").length,
+  };
+}
+
 // --- helpers -------------------------------------------------------------
 
 function margins(

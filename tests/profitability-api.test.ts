@@ -45,4 +45,19 @@ describe("Profitability API", () => {
     const beta = trend.byAccount.find((r: { key: string }) => r.key === "Beta");
     expect(beta.trend).toBe("new");
   });
+
+  test("generates, persists, lists, and fetches a report artifact", async () => {
+    const gen = await post("/v1/profitability/reports", { period: "2026-06", overheadPool: 300, overheadBasis: "labor", greenAtOrAbove: 0.2, yellowAtOrAbove: 0.1 });
+    expect(gen.status).toBe(201);
+    const record = (await gen.json()).report;
+    expect(record.summary.total.netMargin).toBe(1700);
+    expect(record.summary.accountStatusCounts.green).toBe(2);
+    expect(record.detail.report.total.netMargin).toBe(1700);
+
+    const list = await (await app.request("/v1/profitability/reports", { headers })).json();
+    expect(list.reports.some((r: { id: string }) => r.id === record.id)).toBe(true);
+
+    const fetched = await app.request(`/v1/profitability/reports/${record.id}`, { headers });
+    expect((await fetched.json()).report.id).toBe(record.id);
+  });
 });

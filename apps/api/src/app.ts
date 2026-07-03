@@ -192,6 +192,19 @@ v1.post("/profitability/compute", async (c) => {
   return c.json(await repository.profitabilityReport(c.get("tenant"), params));
 });
 
+// Generate + persist a report artifact (executive summary + detail) for a period.
+v1.post("/profitability/reports", async (c) => {
+  const params = profitabilityComputeSchema.parse(await c.req.json());
+  return c.json({ report: await repository.generateProfitabilityReport(c.get("tenant"), params) }, 201);
+});
+
+v1.get("/profitability/reports", async (c) => c.json({ reports: await repository.listProfitabilityReports(c.get("tenant")) }));
+
+v1.get("/profitability/reports/:id", async (c) => {
+  const report = await repository.getProfitabilityReport(c.get("tenant"), c.req.param("id"));
+  return report ? c.json({ report }) : c.notFound();
+});
+
 v1.post("/invoices/:id/apply-credits", async (c) => {
   return c.json({ result: await repository.applyAvailableCredits(c.get("tenant"), c.req.param("id")) });
 });
