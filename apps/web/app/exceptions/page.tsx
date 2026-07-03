@@ -1,4 +1,5 @@
 import type { Invoice } from "@atlas/contracts";
+import { approveInvoice, rejectInvoice } from "../actions";
 
 export default async function ExceptionsPage() {
   let invoices: Invoice[] = [];
@@ -16,10 +17,14 @@ export default async function ExceptionsPage() {
       <h1>Exception Queue</h1>
       <section className="grid">
         {invoices.map((invoice) => (
-          <a className="card" href={`/invoices/${invoice.id}`} key={invoice.id}>
-            <strong>{invoice.invoiceNumber ?? invoice.id.slice(0, 8)}</strong>
-            <p>{invoice.vendorName ?? "Needs review"}</p>
-          </a>
+          <div className="card" key={invoice.id}>
+            <a href={`/invoices/${invoice.id}`}><strong>{invoice.invoiceNumber ?? invoice.id.slice(0, 8)}</strong></a>
+            <p>{invoice.vendorName ?? "Needs review"} · {invoice.currency} {invoice.total}</p>
+            <div style={{ display: "flex", gap: 8 }}>
+              <form action={approveInvoice.bind(null, invoice.id)}><button>Approve</button></form>
+              <form action={rejectInvoice.bind(null, invoice.id)}><button>Reject</button></form>
+            </div>
+          </div>
         ))}
         {invoices.length === 0 ? <div className="card">No exceptions.</div> : null}
       </section>
