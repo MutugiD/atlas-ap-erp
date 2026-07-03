@@ -34,7 +34,7 @@ un-scoped route.
 
 | Method | Path | Body | Purpose |
 |---|---|---|---|
-| POST | `/v1/vendors` | `{ name, taxId?, active?, holdPayments?, paymentTermsDays?, defaultExpenseAccount?, currency? }` | Create a vendor. |
+| POST | `/v1/vendors` | `{ name, taxId?, active?, holdPayments?, paymentTermsDays?, defaultExpenseAccount?, currency?, withholdingTaxRate? }` | Create a vendor. `withholdingTaxRate` (0–1) withholds tax on payment runs. |
 | GET | `/v1/vendors` | — | List vendors. |
 | GET | `/v1/vendors/:id` | — | Get one vendor. |
 | PATCH | `/v1/vendors/:id` | partial vendor | Update (e.g. `{ holdPayments: true }`). A payment hold excludes the vendor's invoices from payment runs. |

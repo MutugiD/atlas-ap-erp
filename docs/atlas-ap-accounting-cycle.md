@@ -107,6 +107,10 @@ RLS coverage:
   a `partial_payments` record capped at the outstanding balance and tracks the remaining balance across
   successive payments. Covered by fast and live tests.
 
+- Withholding tax: vendors carry a `withholdingTaxRate` (0–1); payment runs withhold that portion of each
+  payment, crediting a withholding-tax-payable account (`2150`) instead of cash and keeping the journal
+  balanced. Covered by fast and live tests.
+
 ## Pending
-- Add debit memos, withholding tax, and multi-currency realized FX journal posting.
+- Add debit memos and multi-currency realized FX journal posting.
 - Add bank statement import format parsers.

@@ -241,9 +241,9 @@ export class PostgresInvoiceRepository implements InvoiceRepository {
   async createVendor(ctx: TenantContext, input: CreateVendorInput) {
     return this.tx(ctx.tenantId, async (client) => {
       const result = await client.query(
-        `insert into vendors (tenant_id, name, tax_id, active, hold_payments, payment_terms_days, default_expense_account, currency)
-         values ($1,$2,$3,$4,$5,$6,$7,$8) returning *`,
-        [ctx.tenantId, input.name, input.taxId ?? null, input.active, input.holdPayments, input.paymentTermsDays, input.defaultExpenseAccount, input.currency],
+        `insert into vendors (tenant_id, name, tax_id, active, hold_payments, payment_terms_days, default_expense_account, currency, withholding_tax_rate)
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9) returning *`,
+        [ctx.tenantId, input.name, input.taxId ?? null, input.active, input.holdPayments, input.paymentTermsDays, input.defaultExpenseAccount, input.currency, String(input.withholdingTaxRate)],
       );
       return rowToVendor(result.rows[0]);
     });
@@ -270,9 +270,9 @@ export class PostgresInvoiceRepository implements InvoiceRepository {
       const current = rowToVendor(existing.rows[0]);
       const next = { ...current, ...patch };
       const result = await client.query(
-        `update vendors set name=$3, tax_id=$4, active=$5, hold_payments=$6, payment_terms_days=$7, default_expense_account=$8, currency=$9
+        `update vendors set name=$3, tax_id=$4, active=$5, hold_payments=$6, payment_terms_days=$7, default_expense_account=$8, currency=$9, withholding_tax_rate=$10
          where tenant_id=$1 and id=$2 returning *`,
-        [ctx.tenantId, id, next.name, next.taxId ?? null, next.active, next.holdPayments, next.paymentTermsDays, next.defaultExpenseAccount, next.currency],
+        [ctx.tenantId, id, next.name, next.taxId ?? null, next.active, next.holdPayments, next.paymentTermsDays, next.defaultExpenseAccount, next.currency, String(next.withholdingTaxRate)],
       );
       return rowToVendor(result.rows[0]);
     });
@@ -585,6 +585,7 @@ function rowToVendor(row: Record<string, unknown>): Vendor {
     paymentTermsDays: Number(row.payment_terms_days),
     defaultExpenseAccount: String(row.default_expense_account),
     currency: String(row.currency),
+    withholdingTaxRate: Number(row.withholding_tax_rate),
     createdAt: new Date(row.created_at as string).toISOString(),
   };
 }

@@ -9,6 +9,7 @@ export interface VendorMaster {
   defaultExpenseAccount: string;
   currency: string;
   holdPayments?: boolean;
+  withholdingTaxRate?: number;
 }
 
 export interface AccountingLine {
@@ -96,6 +97,7 @@ export interface Payment {
   currency: string;
   scheduledDate: string;
   status: "scheduled" | "paid" | "reconciled";
+  withheldTax?: Money;
 }
 
 export interface PaymentRun {
@@ -312,6 +314,7 @@ export function createPaymentRun(input: {
   scheduledDate: string;
   apAccount?: string;
   cashAccount?: string;
+  withholdingTaxAccount?: string;
 }): PaymentRun {
   const vendorsById = new Map(input.vendors.map((vendor) => [vendor.id, vendor]));
   const payments: Payment[] = [];
@@ -335,35 +338,51 @@ export function createPaymentRun(input: {
       excluded.push({ invoiceId: invoice.id, reason: "Invoice is not due yet" });
       continue;
     }
+    const amount = roundMoney(invoice.total);
     payments.push({
       id: crypto.randomUUID(),
       invoiceId: invoice.id,
       vendorId: invoice.vendorId,
-      amount: roundMoney(invoice.total),
+      amount,
       currency: invoice.currency,
       scheduledDate: input.scheduledDate,
       status: "scheduled",
+      withheldTax: roundMoney(amount * (vendor.withholdingTaxRate ?? 0)),
     });
   }
 
-  const entries = payments.flatMap((payment): LedgerEntry[] => [
-    {
-      account: input.apAccount ?? "2100",
-      debit: payment.amount,
-      credit: 0,
-      memo: `Clear AP for ${payment.invoiceId}`,
-      invoiceId: payment.invoiceId,
-      paymentId: payment.id,
-    },
-    {
-      account: input.cashAccount ?? "1000",
-      debit: 0,
-      credit: payment.amount,
-      memo: `Cash disbursement for ${payment.invoiceId}`,
-      invoiceId: payment.invoiceId,
-      paymentId: payment.id,
-    },
-  ]);
+  const entries = payments.flatMap((payment): LedgerEntry[] => {
+    const withheld = payment.withheldTax ?? 0;
+    const lines: LedgerEntry[] = [
+      {
+        account: input.apAccount ?? "2100",
+        debit: payment.amount,
+        credit: 0,
+        memo: `Clear AP for ${payment.invoiceId}`,
+        invoiceId: payment.invoiceId,
+        paymentId: payment.id,
+      },
+      {
+        account: input.cashAccount ?? "1000",
+        debit: 0,
+        credit: roundMoney(payment.amount - withheld),
+        memo: `Cash disbursement for ${payment.invoiceId}`,
+        invoiceId: payment.invoiceId,
+        paymentId: payment.id,
+      },
+    ];
+    if (withheld > 0) {
+      lines.push({
+        account: input.withholdingTaxAccount ?? "2150",
+        debit: 0,
+        credit: withheld,
+        memo: `Withholding tax for ${payment.invoiceId}`,
+        invoiceId: payment.invoiceId,
+        paymentId: payment.id,
+      });
+    }
+    return lines;
+  });
 
   return {
     id: crypto.randomUUID(),
