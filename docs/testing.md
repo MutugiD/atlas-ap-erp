@@ -3,6 +3,8 @@
 Run:
 
 ```powershell
+bun.cmd run lint
+bun.cmd run audit
 bun.cmd test
 bun.cmd run typecheck
 bun.cmd run license:audit
@@ -12,6 +14,10 @@ bun.cmd --filter @atlas/web build
 bun.cmd run infra:synth
 docker compose config --quiet
 ```
+
+`bun run lint` runs the ESLint flat config (`eslint.config.js`); `bun run audit` runs `bun audit` against the
+resolved dependency tree. Both are enforced in CI alongside CodeQL, dependency review, and secret scanning —
+see `docs/ci-cd.md`.
 
 Live Support Agent integration:
 

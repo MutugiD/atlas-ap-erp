@@ -1,0 +1,21 @@
+name: dependency-review
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Dependency review
+        uses: actions/dependency-review-action@v4
+        with:
+          # Block PRs that introduce known-vulnerable dependencies.
+          # License compliance is handled separately by `bun run license:audit`.
+          fail-on-severity: high

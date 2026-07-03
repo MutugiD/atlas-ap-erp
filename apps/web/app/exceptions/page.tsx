@@ -8,7 +8,9 @@ export default async function ExceptionsPage() {
       cache: "no-store",
     });
     invoices = (await response.json()).invoices ?? [];
-  } catch {}
+  } catch {
+    // Ignore fetch/network errors and render an empty queue.
+  }
   return (
     <>
       <h1>Exception Queue</h1>

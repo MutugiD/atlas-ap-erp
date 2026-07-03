@@ -41,6 +41,10 @@ jobs:
           bun-version: 1.3.14
       - name: Install
         run: bun install --frozen-lockfile
+      - name: Lint
+        run: bun run lint
+      - name: Dependency audit
+        run: bun run audit
       - name: License audit
         run: bun run license:audit
       - name: Release check

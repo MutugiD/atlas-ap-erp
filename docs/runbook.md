@@ -64,3 +64,7 @@ pull requests), and publishes the support-agent image to GHCR at
 and the semver on `v*` tags. Authentication uses the built-in `GITHUB_TOKEN` (`packages: write`); no extra
 secrets are required. Deploy by pulling the published tag onto the target host; readiness is gated on
 `GET /health/ready`.
+
+Security scanning runs as separate workflows: CodeQL (SAST) on PRs, pushes, and weekly; dependency review on
+PRs; and Gitleaks secret scanning. Dependabot proposes weekly dependency and Actions updates. See
+`docs/ci-cd.md` for the complete reference.
