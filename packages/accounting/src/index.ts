@@ -122,6 +122,52 @@ export interface ReconciliationResult {
   exceptions: ControlFinding[];
 }
 
+export interface CreditMemo {
+  id: string;
+  vendorId: string;
+  amount: Money;
+  currency: string;
+  status: "available" | "applied" | "void";
+}
+
+export interface CreditApplication {
+  creditMemoId: string;
+  invoiceId: string;
+  amountApplied: Money;
+}
+
+export interface CreditMemoApplicationResult {
+  invoiceId: string;
+  grossPayable: Money;
+  netPayable: Money;
+  applications: CreditApplication[];
+  remainingCredits: CreditMemo[];
+  findings: ControlFinding[];
+}
+
+export interface PartialPaymentPlan {
+  invoiceId: string;
+  requestedAmount: Money;
+  paymentAmount: Money;
+  remainingAmount: Money;
+  findings: ControlFinding[];
+}
+
+export interface AgingBucket {
+  label: "current" | "1-30" | "31-60" | "61-90" | "90+";
+  invoiceIds: string[];
+  amount: Money;
+}
+
+export interface RealizedFxResult {
+  invoiceId: string;
+  functionalCurrency: string;
+  invoiceFunctionalAmount: Money;
+  paymentFunctionalAmount: Money;
+  realizedGainLoss: Money;
+  account: "realized_fx_gain" | "realized_fx_loss" | "none";
+}
+
 export function validateInvoiceDataEntry(input: {
   invoice: AccountingInvoice;
   vendor?: VendorMaster;
@@ -370,6 +416,119 @@ export function reconcileBankTransactions(input: {
   return { matched, unmatchedPayments, unmatchedBankTransactions: unmatchedBank, exceptions };
 }
 
+export function applyCreditMemos(input: {
+  invoice: AccountingInvoice;
+  creditMemos: CreditMemo[];
+}): CreditMemoApplicationResult {
+  let remainingPayable = input.invoice.total;
+  const applications: CreditApplication[] = [];
+  const remainingCredits: CreditMemo[] = [];
+  const findings: ControlFinding[] = [];
+
+  for (const memo of input.creditMemos) {
+    if (memo.status !== "available") {
+      remainingCredits.push(memo);
+      continue;
+    }
+    if (memo.vendorId !== input.invoice.vendorId) {
+      findings.push(error("credit_vendor_mismatch", `Credit memo ${memo.id} belongs to a different vendor.`));
+      remainingCredits.push(memo);
+      continue;
+    }
+    if (memo.currency !== input.invoice.currency) {
+      findings.push(error("credit_currency_mismatch", `Credit memo ${memo.id} currency does not match invoice currency.`));
+      remainingCredits.push(memo);
+      continue;
+    }
+    const amountApplied = Math.min(remainingPayable, memo.amount);
+    if (amountApplied > 0) {
+      applications.push({ creditMemoId: memo.id, invoiceId: input.invoice.id, amountApplied: roundMoney(amountApplied) });
+      remainingPayable = roundMoney(remainingPayable - amountApplied);
+    }
+    if (memo.amount > amountApplied) {
+      remainingCredits.push({ ...memo, amount: roundMoney(memo.amount - amountApplied) });
+    }
+  }
+
+  return {
+    invoiceId: input.invoice.id,
+    grossPayable: input.invoice.total,
+    netPayable: roundMoney(remainingPayable),
+    applications,
+    remainingCredits,
+    findings,
+  };
+}
+
+export function createPartialPaymentPlan(input: {
+  invoice: AccountingInvoice;
+  requestedAmount: Money;
+  minimumPayment?: Money;
+}): PartialPaymentPlan {
+  const findings: ControlFinding[] = [];
+  const minimumPayment = input.minimumPayment ?? 1;
+  if (input.invoice.status !== "queued_for_payment") {
+    findings.push(error("invoice_not_payable", `Invoice status ${input.invoice.status} is not payable.`));
+  }
+  if (input.requestedAmount < minimumPayment) {
+    findings.push(error("partial_payment_below_minimum", `Requested amount is below minimum payment ${minimumPayment}.`));
+  }
+  const paymentAmount = Math.min(Math.max(input.requestedAmount, 0), input.invoice.total);
+  return {
+    invoiceId: input.invoice.id,
+    requestedAmount: input.requestedAmount,
+    paymentAmount: findings.some((finding) => finding.severity === "error") ? 0 : roundMoney(paymentAmount),
+    remainingAmount: findings.some((finding) => finding.severity === "error") ? input.invoice.total : roundMoney(input.invoice.total - paymentAmount),
+    findings,
+  };
+}
+
+export function buildApAging(input: {
+  invoices: AccountingInvoice[];
+  asOfDate: string;
+}): AgingBucket[] {
+  const buckets: AgingBucket[] = [
+    { label: "current", invoiceIds: [], amount: 0 },
+    { label: "1-30", invoiceIds: [], amount: 0 },
+    { label: "31-60", invoiceIds: [], amount: 0 },
+    { label: "61-90", invoiceIds: [], amount: 0 },
+    { label: "90+", invoiceIds: [], amount: 0 },
+  ];
+  for (const invoice of input.invoices) {
+    if (!["posted", "queued_for_payment", "awaiting_approval"].includes(invoice.status)) continue;
+    const daysPastDue = daysBetween(invoice.dueDate ?? invoice.invoiceDate, input.asOfDate);
+    const bucket =
+      daysPastDue <= 0 ? buckets[0] :
+      daysPastDue <= 30 ? buckets[1] :
+      daysPastDue <= 60 ? buckets[2] :
+      daysPastDue <= 90 ? buckets[3] :
+      buckets[4];
+    bucket.invoiceIds.push(invoice.id);
+    bucket.amount = roundMoney(bucket.amount + invoice.total);
+  }
+  return buckets;
+}
+
+export function calculateRealizedFx(input: {
+  invoiceId: string;
+  invoiceAmount: Money;
+  functionalCurrency: string;
+  invoiceFxRate: number;
+  paymentFxRate: number;
+}): RealizedFxResult {
+  const invoiceFunctionalAmount = roundMoney(input.invoiceAmount * input.invoiceFxRate);
+  const paymentFunctionalAmount = roundMoney(input.invoiceAmount * input.paymentFxRate);
+  const realizedGainLoss = roundMoney(invoiceFunctionalAmount - paymentFunctionalAmount);
+  return {
+    invoiceId: input.invoiceId,
+    functionalCurrency: input.functionalCurrency,
+    invoiceFunctionalAmount,
+    paymentFunctionalAmount,
+    realizedGainLoss,
+    account: realizedGainLoss > 0 ? "realized_fx_gain" : realizedGainLoss < 0 ? "realized_fx_loss" : "none",
+  };
+}
+
 export function journalBalances(entries: LedgerEntry[], tolerance: Money = 0.01) {
   const debits = entries.reduce((sum, entry) => sum + toCents(entry.debit), 0);
   const credits = entries.reduce((sum, entry) => sum + toCents(entry.credit), 0);
@@ -402,6 +561,11 @@ function moneyEquals(left: Money, right: Money, toleranceCents = 0) {
 
 function dateInPeriod(date: string, period: AccountingPeriod) {
   return date >= period.startsOn && date <= period.endsOn;
+}
+
+function daysBetween(from: string, to: string) {
+  const dayMs = 24 * 60 * 60 * 1000;
+  return Math.floor((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / dayMs);
 }
 
 function error(code: string, message: string): ControlFinding {

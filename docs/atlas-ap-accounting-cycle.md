@@ -26,6 +26,7 @@ Implemented controls:
 - Payment run: excludes held vendors, not-due invoices, and non-payable statuses.
 - Bank reconciliation: matches payments to bank debits and reports unmatched payments/transactions.
 - Trial balance helper for account-level debit/credit net checks.
+- Credit memo application, partial payment planning, AP aging, and realized FX calculations.
 
 ## API Surface Added
 
@@ -84,5 +85,6 @@ RLS coverage:
 - Add vendor master and purchase order CRUD APIs.
 - Add accounting-period close/reopen workflow.
 - Add partial payments, credit memos, debit memos, withholding tax, and multi-currency realized FX.
+- Add debit memos, withholding tax, and multi-currency realized FX journal posting.
 - Add bank statement import format parsers.
 - Run live Postgres RLS tests for the new accounting tables once Docker/staging Postgres is available.
