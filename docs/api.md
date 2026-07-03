@@ -76,6 +76,14 @@ writes no journal.
 | POST | `/v1/debit-memos` | `{ vendorId?, amount, currency, reason? }` | Issue a vendor debit memo (e.g. a return); posts a balanced `debit_memo` GL journal (Dr AP `2100`, Cr purchase returns `5100`). Returns `{ debitMemo, journal }`. |
 | GET | `/v1/debit-memos` | — | List debit memos. |
 
+## Profitability
+
+| Method | Path | Body / query | Purpose |
+|---|---|---|---|
+| POST | `/v1/profitability/inputs` | `{ period, account, serviceLine, feeRevenue?, laborHours?, laborCostRate?, mediaSpend?, mediaMarkupRate? }` | Record a per-period input row (account × service line). |
+| GET | `/v1/profitability/inputs` | `?period=YYYY-MM` | List inputs for a period. |
+| POST | `/v1/profitability/compute` | `{ period, priorPeriod?, overheadPool, overheadBasis?, greenAtOrAbove?, yellowAtOrAbove? }` | Run the `@atlas/profitability` engine over the period's inputs; returns `{ report, trend }` (trend present when `priorPeriod` is given). See `docs/profitability.md`. |
+
 ## Payments, reconciliation & accounting calculators
 
 | Method | Path | Body / query | Purpose |
