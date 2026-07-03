@@ -84,6 +84,8 @@ Atlas AP uses a Supervisor agent to route invoices through extraction, validatio
 
 The accounting-cycle layer adds vendor master checks, invoice arithmetic validation, PO/receipt tolerance checks, balanced AP posting journals, payment runs, and bank reconciliation tests. See `docs/atlas-ap-accounting-cycle.md`.
 
+Bank integration is behind a `BankConnector` seam (Equity Jenga implemented; KCB Buni next) selected via `BANK_PROVIDER`; the default keeps everything hermetic. See `docs/bank-integration.md` for the verified provider facts (Jenga statements/auth, KCB Buni IPN, PesaLink/RTGS/M-Pesa rails).
+
 Support Agent V2 adds a native belief-revision memory engine: deterministic fact extraction, PII redaction, local embeddings seam, idempotent writes, supersession lineage, context retrieval, stateless mode, Postgres/pgvector persistence seam, BullMQ durable ingest seam, JWT/API-key auth, per-tenant rate limiting, and a 13-capability contract suite.
 
 ## CI/CD and Security
