@@ -33,6 +33,15 @@ bun.cmd run test:live-api
 payment runs and posting transitions persist balanced GL journals. Both live suites are skipped unless their
 `RUN_LIVE_*` flag is set (the scripts set it) and are gated in CI on Postgres/Redis service containers.
 
+### End-to-end invoice-to-pay
+
+`tests/e2e-invoice-to-pay.test.ts` walks the whole lifecycle through the HTTP API against the in-memory
+repository (runs in the default `bun test`): vendor + purchase order + goods receipt → invoice → three-way
+match → agent pipeline (`reprocess`) → posting preview → payment run → **bank reconciliation**. The same
+scenario runs against real Postgres via the real agent supervisor in `tests/api-live.test.ts`
+("end-to-end invoice-to-pay against Postgres…"), which additionally asserts the posting, payment-run, and
+reconciliation records persist.
+
 The test suite covers:
 
 - Lifecycle reducer safety.
