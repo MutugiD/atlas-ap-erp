@@ -33,7 +33,7 @@
     "aws-cdk-lib": "^2.171.1",
     "bullmq": "^5.31.0",
     "constructs": "^10.4.2",
-    "cockatiel": "^3.2.1",
+    "cockatiel": "^4.0.0",
     "drizzle-orm": "^0.45.2",
     "fastify": "^5.2.1",
     "hono": "^4.6.12",
