@@ -86,6 +86,10 @@
       "name": "@atlas/memory-engine",
       "version": "0.1.0",
     },
+    "packages/profitability": {
+      "name": "@atlas/profitability",
+      "version": "0.1.0",
+    },
     "packages/support-contracts": {
       "name": "@atlas/support-contracts",
       "version": "0.1.0",
@@ -113,6 +117,8 @@
     "@atlas/infra": ["@atlas/infra@workspace:infra"],
 
     "@atlas/memory-engine": ["@atlas/memory-engine@workspace:packages/memory-engine"],
+
+    "@atlas/profitability": ["@atlas/profitability@workspace:packages/profitability"],
 
     "@atlas/support-agent": ["@atlas/support-agent@workspace:apps/support-agent"],
 
