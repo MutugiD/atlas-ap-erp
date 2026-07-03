@@ -10,14 +10,18 @@ import {
   type CreateVendorInput,
   type CreditMemoRecord,
   type DebitMemoRecord,
+  type CreateProfitabilityInput,
   type GoodsReceiptRecord,
   type Invoice,
   type PartialPaymentRecord,
+  type ProfitabilityComputeInput,
+  type ProfitabilityInputRecord,
   type PurchaseOrder,
   type TenantContext,
   type UpdateVendorInput,
   type Vendor,
 } from "@atlas/contracts";
+import { computeProfitability as computeProfitabilityReport, withTrend, type ReportWithTrend } from "@atlas/profitability";
 import {
   applyCreditMemos,
   buildApAging,
@@ -38,7 +42,16 @@ import {
 import { Pool, type PoolClient } from "pg";
 import type { InvoiceRepository, PartialPaymentExecution } from "./repository";
 import { ClosedPeriodError } from "./errors";
-import { toAccountingCreditMemo, toAccountingInvoice, toGoodsReceipt, toPurchaseOrderAccounting, toVendorMaster, vendorMastersForInvoices } from "./mappers";
+import {
+  profitabilityConfigFrom,
+  toAccountingCreditMemo,
+  toAccountingInvoice,
+  toEngineInput,
+  toGoodsReceipt,
+  toPurchaseOrderAccounting,
+  toVendorMaster,
+  vendorMastersForInvoices,
+} from "./mappers";
 
 // Postgres-backed AP repository. Mirrors the transaction + RLS pattern used by
 // PostgresNativeStore in the memory engine: every unit of work runs inside a
@@ -471,6 +484,35 @@ export class PostgresInvoiceRepository implements InvoiceRepository {
     });
   }
 
+  async createProfitabilityInput(ctx: TenantContext, input: CreateProfitabilityInput) {
+    return this.tx(ctx.tenantId, async (client) => {
+      const result = await client.query(
+        `insert into profitability_inputs (tenant_id, period, account, service_line, fee_revenue, labor_hours, labor_cost_rate, media_spend, media_markup_rate)
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9) returning *`,
+        [ctx.tenantId, input.period, input.account, input.serviceLine, String(input.feeRevenue), String(input.laborHours), String(input.laborCostRate), String(input.mediaSpend), String(input.mediaMarkupRate)],
+      );
+      return rowToProfitabilityInput(result.rows[0]);
+    });
+  }
+
+  async listProfitabilityInputs(ctx: TenantContext, period: string) {
+    return this.tx(ctx.tenantId, async (client) => {
+      const result = await client.query("select * from profitability_inputs where tenant_id = $1 and period = $2 order by account, service_line", [ctx.tenantId, period]);
+      return result.rows.map(rowToProfitabilityInput);
+    });
+  }
+
+  async profitabilityReport(ctx: TenantContext, params: ProfitabilityComputeInput) {
+    const config = profitabilityConfigFrom(params);
+    const report = computeProfitabilityReport((await this.listProfitabilityInputs(ctx, params.period)).map(toEngineInput), config);
+    let trend: ReportWithTrend | null = null;
+    if (params.priorPeriod) {
+      const prior = computeProfitabilityReport((await this.listProfitabilityInputs(ctx, params.priorPeriod)).map(toEngineInput), config);
+      trend = withTrend(report, prior);
+    }
+    return { report, trend };
+  }
+
   async executePartialPayment(ctx: TenantContext, invoiceId: string, requestedAmount: number): Promise<PartialPaymentExecution> {
     return this.tx(ctx.tenantId, async (client) => {
       const invoiceResult = await client.query("select * from invoices where tenant_id = $1 and id = $2 limit 1", [ctx.tenantId, invoiceId]);
@@ -633,6 +675,22 @@ function toDateString(value: unknown): string {
     return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
   }
   return String(value);
+}
+
+function rowToProfitabilityInput(row: Record<string, unknown>): ProfitabilityInputRecord {
+  return {
+    id: String(row.id),
+    tenantId: String(row.tenant_id),
+    period: String(row.period),
+    account: String(row.account),
+    serviceLine: String(row.service_line),
+    feeRevenue: Number(row.fee_revenue),
+    laborHours: Number(row.labor_hours),
+    laborCostRate: Number(row.labor_cost_rate),
+    mediaSpend: Number(row.media_spend),
+    mediaMarkupRate: Number(row.media_markup_rate),
+    createdAt: new Date(row.created_at as string).toISOString(),
+  };
 }
 
 function rowToDebitMemo(row: Record<string, unknown>): DebitMemoRecord {

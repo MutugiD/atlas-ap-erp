@@ -1,5 +1,14 @@
-import { type CreditMemoRecord, type GoodsReceiptRecord, type Invoice, type PurchaseOrder, type Vendor } from "@atlas/contracts";
+import {
+  type CreditMemoRecord,
+  type GoodsReceiptRecord,
+  type Invoice,
+  type ProfitabilityComputeInput,
+  type ProfitabilityInputRecord,
+  type PurchaseOrder,
+  type Vendor,
+} from "@atlas/contracts";
 import { type AccountingInvoice, type CreditMemo, type GoodsReceipt, type PurchaseOrderAccounting, type VendorMaster } from "@atlas/accounting";
+import { type ProfitabilityConfig, type ProfitabilityInput } from "@atlas/profitability";
 
 // Shared mapping from the persisted Invoice shape to the accounting-engine
 // inputs, used by both the in-memory and Postgres repositories.
@@ -69,6 +78,26 @@ export function toGoodsReceipt(receipt: GoodsReceiptRecord): GoodsReceipt {
 
 export function toAccountingCreditMemo(memo: CreditMemoRecord): CreditMemo {
   return { id: memo.id, vendorId: memo.vendorId ?? "", amount: memo.amount, currency: memo.currency, status: memo.status };
+}
+
+export function profitabilityConfigFrom(params: ProfitabilityComputeInput): ProfitabilityConfig {
+  const config: ProfitabilityConfig = { overheadPool: params.overheadPool };
+  if (params.overheadBasis) config.overheadBasis = params.overheadBasis;
+  if (params.greenAtOrAbove !== undefined) config.greenAtOrAbove = params.greenAtOrAbove;
+  if (params.yellowAtOrAbove !== undefined) config.yellowAtOrAbove = params.yellowAtOrAbove;
+  return config;
+}
+
+export function toEngineInput(record: ProfitabilityInputRecord): ProfitabilityInput {
+  return {
+    account: record.account,
+    serviceLine: record.serviceLine,
+    feeRevenue: record.feeRevenue,
+    laborHours: record.laborHours,
+    laborCostRate: record.laborCostRate,
+    mediaSpend: record.mediaSpend,
+    mediaMarkupRate: record.mediaMarkupRate,
+  };
 }
 
 // Build the VendorMaster list a payment run needs: use the real vendor master

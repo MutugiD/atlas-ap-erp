@@ -157,8 +157,28 @@ export const glJournalLines = pgTable(
     debit: numeric("debit", { precision: 14, scale: 2 }).notNull().default("0"),
     credit: numeric("credit", { precision: 14, scale: 2 }).notNull().default("0"),
     memo: text("memo").notNull(),
+    clientAccount: text("client_account"),
+    serviceLine: text("service_line"),
   },
   (t) => [index("gl_journal_lines_tenant_journal_idx").on(t.tenantId, t.journalEntryId), tenantPolicy(t)],
+).enableRLS();
+
+export const profitabilityInputs = pgTable(
+  "profitability_inputs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    period: text("period").notNull(),
+    account: text("account").notNull(),
+    serviceLine: text("service_line").notNull(),
+    feeRevenue: numeric("fee_revenue", { precision: 14, scale: 2 }).notNull().default("0"),
+    laborHours: numeric("labor_hours", { precision: 14, scale: 2 }).notNull().default("0"),
+    laborCostRate: numeric("labor_cost_rate", { precision: 14, scale: 2 }).notNull().default("0"),
+    mediaSpend: numeric("media_spend", { precision: 14, scale: 2 }).notNull().default("0"),
+    mediaMarkupRate: numeric("media_markup_rate", { precision: 6, scale: 4 }).notNull().default("0"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("profitability_inputs_tenant_period_idx").on(t.tenantId, t.period), tenantPolicy(t)],
 ).enableRLS();
 
 export const paymentRuns = pgTable(

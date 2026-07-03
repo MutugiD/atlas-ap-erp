@@ -11,14 +11,23 @@ import {
   type CreditMemoRecord,
   type DebitMemoRecord,
   type GoodsReceiptRecord,
+  type CreateProfitabilityInput,
   type Invoice,
   type PartialPaymentRecord,
+  type ProfitabilityComputeInput,
+  type ProfitabilityInputRecord,
   type PurchaseOrder,
   type TenantContext,
   type UpdateVendorInput,
   type Vendor,
 } from "@atlas/contracts";
 import type { AgentRepository } from "@atlas/agents";
+import {
+  computeProfitability as computeProfitabilityReport,
+  withTrend,
+  type ProfitabilityReport,
+  type ReportWithTrend,
+} from "@atlas/profitability";
 import {
   applyCreditMemos,
   buildApAging,
@@ -37,7 +46,16 @@ import {
   type Payment,
   type PaymentRun,
 } from "@atlas/accounting";
-import { toAccountingCreditMemo, toAccountingInvoice, toGoodsReceipt, toPurchaseOrderAccounting, toVendorMaster, vendorMastersForInvoices } from "./mappers";
+import {
+  profitabilityConfigFrom,
+  toAccountingCreditMemo,
+  toAccountingInvoice,
+  toEngineInput,
+  toGoodsReceipt,
+  toPurchaseOrderAccounting,
+  toVendorMaster,
+  vendorMastersForInvoices,
+} from "./mappers";
 import { ClosedPeriodError } from "./errors";
 import { PostgresInvoiceRepository } from "./postgres-repository";
 
@@ -78,6 +96,9 @@ export interface InvoiceRepository extends AgentRepository {
   listPartialPayments(ctx: TenantContext, invoiceId: string): Promise<PartialPaymentRecord[]>;
   createDebitMemo(ctx: TenantContext, input: CreateDebitMemoInput): Promise<{ debitMemo: DebitMemoRecord; journal: JournalEntry }>;
   listDebitMemos(ctx: TenantContext): Promise<DebitMemoRecord[]>;
+  createProfitabilityInput(ctx: TenantContext, input: CreateProfitabilityInput): Promise<ProfitabilityInputRecord>;
+  listProfitabilityInputs(ctx: TenantContext, period: string): Promise<ProfitabilityInputRecord[]>;
+  profitabilityReport(ctx: TenantContext, params: ProfitabilityComputeInput): Promise<{ report: ProfitabilityReport; trend: ReportWithTrend | null }>;
 }
 
 export interface PartialPaymentExecution {
@@ -98,6 +119,7 @@ export class InMemoryInvoiceRepository implements InvoiceRepository {
   private readonly creditMemos = new Map<string, CreditMemoRecord>();
   private readonly partialPaymentRecords: PartialPaymentRecord[] = [];
   private readonly debitMemos = new Map<string, DebitMemoRecord>();
+  private readonly profitabilityInputs: ProfitabilityInputRecord[] = [];
 
   async createInvoice(ctx: TenantContext, input: CreateInvoiceInput) {
     const id = crypto.randomUUID();
@@ -312,6 +334,27 @@ export class InMemoryInvoiceRepository implements InvoiceRepository {
 
   async listDebitMemos(ctx: TenantContext) {
     return [...this.debitMemos.values()].filter((memo) => memo.tenantId === ctx.tenantId);
+  }
+
+  async createProfitabilityInput(ctx: TenantContext, input: CreateProfitabilityInput) {
+    const record: ProfitabilityInputRecord = { id: crypto.randomUUID(), tenantId: ctx.tenantId, createdAt: now(), ...input };
+    this.profitabilityInputs.push(record);
+    return record;
+  }
+
+  async listProfitabilityInputs(ctx: TenantContext, period: string) {
+    return this.profitabilityInputs.filter((record) => record.tenantId === ctx.tenantId && record.period === period);
+  }
+
+  async profitabilityReport(ctx: TenantContext, params: ProfitabilityComputeInput) {
+    const config = profitabilityConfigFrom(params);
+    const report = computeProfitabilityReport((await this.listProfitabilityInputs(ctx, params.period)).map(toEngineInput), config);
+    let trend: ReportWithTrend | null = null;
+    if (params.priorPeriod) {
+      const prior = computeProfitabilityReport((await this.listProfitabilityInputs(ctx, params.priorPeriod)).map(toEngineInput), config);
+      trend = withTrend(report, prior);
+    }
+    return { report, trend };
   }
 
   async addEvent(_ctx: TenantContext, event: Omit<AgentEvent, "id" | "createdAt">) {

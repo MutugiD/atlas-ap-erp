@@ -298,6 +298,43 @@ export const executePartialPaymentSchema = z.object({
 });
 export type ExecutePartialPaymentInput = z.infer<typeof executePartialPaymentSchema>;
 
+export const profitabilityInputRecordSchema = z.object({
+  id: uuidSchema,
+  tenantId: uuidSchema,
+  period: z.string(),
+  account: z.string(),
+  serviceLine: z.string(),
+  feeRevenue: z.number(),
+  laborHours: z.number(),
+  laborCostRate: z.number(),
+  mediaSpend: z.number(),
+  mediaMarkupRate: z.number(),
+  createdAt: z.string(),
+});
+export type ProfitabilityInputRecord = z.infer<typeof profitabilityInputRecordSchema>;
+
+export const createProfitabilityInputSchema = z.object({
+  period: z.string().min(1),
+  account: z.string().min(1),
+  serviceLine: z.string().min(1),
+  feeRevenue: z.number().nonnegative().default(0),
+  laborHours: z.number().nonnegative().default(0),
+  laborCostRate: z.number().nonnegative().default(0),
+  mediaSpend: z.number().nonnegative().default(0),
+  mediaMarkupRate: z.number().min(0).max(1).default(0),
+});
+export type CreateProfitabilityInput = z.infer<typeof createProfitabilityInputSchema>;
+
+export const profitabilityComputeSchema = z.object({
+  period: z.string().min(1),
+  priorPeriod: z.string().optional(),
+  overheadPool: z.number().nonnegative().default(0),
+  overheadBasis: z.enum(["labor", "revenue"]).optional(),
+  greenAtOrAbove: z.number().optional(),
+  yellowAtOrAbove: z.number().optional(),
+});
+export type ProfitabilityComputeInput = z.infer<typeof profitabilityComputeSchema>;
+
 export const transitionSchema = z.object({
   from: invoiceStatusSchema,
   to: invoiceStatusSchema,

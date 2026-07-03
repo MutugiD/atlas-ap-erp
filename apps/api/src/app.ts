@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { createAccountingPeriodSchema, createCreditMemoSchema, createDebitMemoSchema, createGoodsReceiptSchema, createInvoiceSchema, createPurchaseOrderSchema, createVendorSchema, executePartialPaymentSchema, updateVendorSchema } from "@atlas/contracts";
+import { createAccountingPeriodSchema, createCreditMemoSchema, createDebitMemoSchema, createGoodsReceiptSchema, createInvoiceSchema, createProfitabilityInputSchema, createPurchaseOrderSchema, createVendorSchema, executePartialPaymentSchema, profitabilityComputeSchema, updateVendorSchema } from "@atlas/contracts";
 import { Supervisor } from "@atlas/agents";
 import { repository } from "./repository";
 import { ClosedPeriodError } from "./errors";
@@ -175,6 +175,22 @@ v1.post("/debit-memos", async (c) => {
 });
 
 v1.get("/debit-memos", async (c) => c.json({ debitMemos: await repository.listDebitMemos(c.get("tenant")) }));
+
+v1.post("/profitability/inputs", async (c) => {
+  const input = createProfitabilityInputSchema.parse(await c.req.json());
+  return c.json({ input: await repository.createProfitabilityInput(c.get("tenant"), input) }, 201);
+});
+
+v1.get("/profitability/inputs", async (c) => {
+  const period = c.req.query("period");
+  if (!period) return c.json({ error: "period query param is required" }, 400);
+  return c.json({ inputs: await repository.listProfitabilityInputs(c.get("tenant"), period) });
+});
+
+v1.post("/profitability/compute", async (c) => {
+  const params = profitabilityComputeSchema.parse(await c.req.json());
+  return c.json(await repository.profitabilityReport(c.get("tenant"), params));
+});
 
 v1.post("/invoices/:id/apply-credits", async (c) => {
   return c.json({ result: await repository.applyAvailableCredits(c.get("tenant"), c.req.param("id")) });

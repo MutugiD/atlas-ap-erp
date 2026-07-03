@@ -262,6 +262,24 @@ describeLive("Atlas AP live Postgres persistence", () => {
     await appPool.end();
   });
 
+  test("profitability inputs are tenant-scoped and compute a report on Postgres", async () => {
+    const appPool = await freshSchema();
+    const repo = new PostgresInvoiceRepository({ pool: appPool });
+
+    await repo.createProfitabilityInput(ctxA, { period: "2026-06", account: "Acme", serviceLine: "SEO", feeRevenue: 1000, laborHours: 10, laborCostRate: 30, mediaSpend: 500, mediaMarkupRate: 0.2 });
+    await repo.createProfitabilityInput(ctxA, { period: "2026-06", account: "Beta", serviceLine: "SEO", feeRevenue: 2000, laborHours: 20, laborCostRate: 40, mediaSpend: 0, mediaMarkupRate: 0 });
+
+    expect(await repo.listProfitabilityInputs(ctxB, "2026-06")).toHaveLength(0); // RLS
+    expect(await repo.listProfitabilityInputs(ctxA, "2026-06")).toHaveLength(2);
+
+    const { report } = await repo.profitabilityReport(ctxA, { period: "2026-06", overheadPool: 300, overheadBasis: "labor" });
+    expect(report.slices).toHaveLength(2);
+    expect(report.total.revenue).toBe(3600); // 1600 (Acme, media marked up) + 2000 (Beta)
+    expect(report.total.overhead).toBe(300);
+
+    await appPool.end();
+  });
+
   test("posting transition persists a balanced invoice_posting journal", async () => {
     const appPool = await freshSchema();
     const repo = new PostgresInvoiceRepository({ pool: appPool });
@@ -286,7 +304,7 @@ async function freshSchema(): Promise<Pool> {
     drop table if exists reconciliations, bank_transactions, payments, payment_runs,
       gl_journal_lines, gl_journal_entries, goods_receipts, accounting_periods,
       credit_memo_applications, credit_memos, debit_memos, partial_payments,
-      agent_events, invoices, purchase_orders, vendors, tenants cascade;
+      profitability_inputs, agent_events, invoices, purchase_orders, vendors, tenants cascade;
     drop role if exists app_user;
   `);
   for (const m of [
@@ -299,6 +317,7 @@ async function freshSchema(): Promise<Pool> {
     "0006_partial_payments",
     "0007_vendor_withholding_tax",
     "0008_debit_memos",
+    "0009_profitability",
   ]) {
     await owner.query(readFileSync(`packages/db/migrations/${m}.sql`, "utf8"));
   }
