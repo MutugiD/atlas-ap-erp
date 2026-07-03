@@ -39,6 +39,16 @@ describe("Ollama agent provider", () => {
     expect(draft.confidence).toBe(0.92);
   });
 
+  test("extracts from a fenced JSON response, ignoring null/empty fields", async () => {
+    const fenced = "```json\n{\n \"vendorName\": \"Fenced Co\",\n \"invoiceNumber\": \"INV-9\",\n \"invoiceDate\": null,\n \"currency\": \"USD\",\n \"subtotal\": 1160,\n \"tax\": 0,\n \"total\": 1160,\n \"lines\": [],\n \"confidence\": 0.42\n}\n```";
+    const provider = new OllamaAgentProvider({ fetchImpl: fetchReturning(fenced) });
+    const draft = await provider.extract(invoice);
+    expect(draft.vendorName).toBe("Fenced Co"); // model value used despite the ```json fence
+    expect(draft.confidence).toBe(0.42); // model value used, not the deterministic fallback
+    expect(draft.lines.length).toBeGreaterThan(0); // default kept because the model returned []
+    expect(typeof draft.invoiceDate).toBe("string"); // default kept because the model returned null
+  });
+
   test("falls back to deterministic extraction when the model errors", async () => {
     const failing = (async () => new Response("boom", { status: 500 })) as unknown as typeof fetch;
     const provider = new OllamaAgentProvider({ fetchImpl: failing });
