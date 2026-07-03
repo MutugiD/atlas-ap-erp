@@ -8,6 +8,7 @@ import {
 import { assertTransition } from "./lifecycle";
 import { type AgentProvider, LocalAgentProvider, sumsToTotal } from "./local-provider";
 import { BedrockAgentProvider } from "./bedrock-provider";
+import { OllamaAgentProvider } from "./ollama-provider";
 
 export interface AgentRepository {
   listInvoiceNumbers(ctx: TenantContext, excludeInvoiceId: string): Promise<string[]>;
@@ -21,7 +22,14 @@ export interface SupervisorResult {
 }
 
 export function createAgentProvider(): AgentProvider {
-  return process.env.AGENT_PROVIDER === "bedrock" ? new BedrockAgentProvider() : new LocalAgentProvider();
+  switch (process.env.AGENT_PROVIDER) {
+    case "bedrock":
+      return new BedrockAgentProvider();
+    case "ollama":
+      return new OllamaAgentProvider();
+    default:
+      return new LocalAgentProvider();
+  }
 }
 
 export class Supervisor {

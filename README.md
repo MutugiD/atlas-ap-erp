@@ -74,6 +74,12 @@ The CDK stack creates the document bucket, processing queue, DLQ, Lambda process
 
 ## Interview Narrative
 
+The invoice agent provider is selectable via `AGENT_PROVIDER`:
+
+- `local` (default) — deterministic provider, no external calls (used by tests).
+- `bedrock` — AWS Bedrock agent (`BEDROCK_SUPERVISOR_AGENT_ID`).
+- `ollama` — extracts invoice fields with an Ollama model (`OLLAMA_URL`, `OLLAMA_MODEL`, optional `OLLAMA_API_KEY`), delegating validation/matching/coding/routing to the deterministic rules and falling back to them if the model is unreachable.
+
 Atlas AP uses a Supervisor agent to route invoices through extraction, validation, 3-way matching, GL coding, and approval routing. Clean PO-backed invoices can post without human touch; low-confidence, duplicate, or variance cases move to an exception queue. Every agent and human decision is recorded in `agent_events`, and tenant isolation is enforced through Postgres RLS with `SET LOCAL app.tenant_id`.
 
 The accounting-cycle layer adds vendor master checks, invoice arithmetic validation, PO/receipt tolerance checks, balanced AP posting journals, payment runs, and bank reconciliation tests. See `docs/atlas-ap-accounting-cycle.md`.
