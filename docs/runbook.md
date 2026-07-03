@@ -21,7 +21,22 @@ Invoke-RestMethod -Method Post http://localhost:3001/v1/invoices `
 
 ## Reprocess
 
-Call `POST /v1/invoices/:id/reprocess` to run the local or Bedrock agent provider.
+Call `POST /v1/invoices/:id/reprocess` to run the configured agent provider.
+
+Agent provider selection (`AGENT_PROVIDER`): `local` (default, deterministic), `bedrock`
+(`BEDROCK_SUPERVISOR_AGENT_ID`), or `ollama`. For Ollama, set:
+
+```powershell
+$env:AGENT_PROVIDER="ollama"
+$env:OLLAMA_URL="https://your-ollama-host"   # default http://localhost:11434
+$env:OLLAMA_MODEL="llama3.1"
+$env:OLLAMA_API_KEY="<token>"                # optional; sent as Bearer if set
+bun.cmd run dev:api
+```
+
+The Ollama provider uses the model for invoice-field **extraction** only; validation, matching, GL coding,
+and approval routing stay deterministic, and extraction falls back to the deterministic provider if the model
+is unreachable or returns an invalid draft.
 
 ## Support Agent V2 Operator Checks
 
