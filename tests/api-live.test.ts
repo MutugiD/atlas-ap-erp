@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { Pool } from "pg";
 import type { TenantContext } from "@atlas/contracts";
 import { PostgresInvoiceRepository } from "../apps/api/src/postgres-repository";
+import { Supervisor } from "@atlas/agents";
 
 const live = process.env.RUN_LIVE_API_TESTS === "true";
 const describeLive = live ? describe : describe.skip;
@@ -208,6 +209,55 @@ describeLive("Atlas AP live Postgres persistence", () => {
     expect(await repo.listDebitMemos(ctxA)).toHaveLength(1);
     expect(await scalar(appPool, tenantA, "select count(*)::int from gl_journal_entries where source = 'debit_memo'")).toBe(1);
     expect(await scalar(appPool, tenantA, "select coalesce(sum(debit),0)::float from gl_journal_lines where account = '2100'")).toBe(250);
+
+    await appPool.end();
+  });
+
+  test("end-to-end invoice-to-pay against Postgres: agent pipeline, posting, payment, bank reconciliation", async () => {
+    const appPool = await freshSchema();
+    const repo = new PostgresInvoiceRepository({ pool: appPool });
+    const supervisor = new Supervisor();
+
+    // Vendor + PO + goods receipt, then an invoice referencing them.
+    const vendor = await repo.createVendor(ctxA, { name: "Acme Corp", currency: "USD", active: true, holdPayments: false, paymentTermsDays: 30, defaultExpenseAccount: "6100", withholdingTaxRate: 0 });
+    const po = await repo.createPurchaseOrder(ctxA, { poNumber: "E2E-PO", vendorId: vendor.id, currency: "USD", lines: [{ description: "Acme Corp", quantity: 1, unitPrice: 1200, total: 1200 }] });
+    await repo.createGoodsReceipt(ctxA, { poId: po.id, description: "Acme Corp", quantityReceived: 1 });
+    const { invoice } = await repo.createInvoice(ctxA, { vendorName: "Acme Corp", vendorId: vendor.id, poId: po.id, invoiceNumber: "E2E-INV", total: 1200, currency: "USD" });
+
+    // Three-way match before processing (raw amounts align with the PO/receipt).
+    const match = await repo.matchInvoice(ctxA, invoice.id);
+    expect(match.ok).toBe(true);
+    expect(match.amountVariance).toBe(0);
+
+    // The real agent supervisor drives the invoice to payable and persists events.
+    const result = await supervisor.process(ctxA, invoice, repo);
+    expect(result.invoice.status).toBe("queued_for_payment");
+    expect((await repo.listEvents(ctxA, invoice.id)).length).toBeGreaterThan(0);
+
+    // The posting transition persisted a balanced invoice_posting journal.
+    const [postDebit, postCredit] = await debitCredit(appPool, tenantA, "invoice_posting");
+    expect(postDebit).toBe(postCredit);
+    expect(postDebit).toBeGreaterThan(0);
+
+    // Payment run pays the processed invoice and persists a balanced journal.
+    const processed = await repo.getInvoice(ctxA, invoice.id);
+    if (!processed) throw new Error("expected the processed invoice");
+    const run = await repo.createPaymentRun(ctxA, "2099-12-31");
+    const payment = run.payments.find((p) => p.invoiceId === invoice.id);
+    if (!payment) throw new Error("expected a payment for the invoice");
+    expect(payment.amount).toBe(processed.total);
+    expect(await scalar(appPool, tenantA, "select count(*)::int from payments")).toBeGreaterThan(0);
+    const [payDebit, payCredit] = await debitCredit(appPool, tenantA, "payment_run");
+    expect(payDebit).toBe(payCredit);
+
+    // Bank integration: reconcile the disbursement against a bank statement line.
+    const recon = await repo.reconcilePayments(ctxA, [
+      { id: "aaaaaaaa-0000-4000-8000-00000000e2e1", amount: -payment.amount, currency: "USD", valueDate: "2099-12-31", reference: `ACH ${invoice.id.slice(0, 8)}` },
+    ]);
+    expect(recon.matched).toHaveLength(1);
+    expect(recon.matched[0].paymentId).toBe(payment.id);
+    expect(await scalar(appPool, tenantA, "select count(*)::int from reconciliations")).toBe(1);
+    expect(await scalar(appPool, tenantA, "select count(*)::int from bank_transactions")).toBe(1);
 
     await appPool.end();
   });
