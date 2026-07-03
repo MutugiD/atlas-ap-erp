@@ -69,6 +69,13 @@ writes no journal.
 | GET | `/v1/credit-memos` | — | List credit memos. |
 | POST | `/v1/invoices/:id/apply-credits` | — | Apply available memos for the invoice's vendor (persists applications, reduces/closes memos). |
 
+## Debit memos
+
+| Method | Path | Body | Purpose |
+|---|---|---|---|
+| POST | `/v1/debit-memos` | `{ vendorId?, amount, currency, reason? }` | Issue a vendor debit memo (e.g. a return); posts a balanced `debit_memo` GL journal (Dr AP `2100`, Cr purchase returns `5100`). Returns `{ debitMemo, journal }`. |
+| GET | `/v1/debit-memos` | — | List debit memos. |
+
 ## Payments, reconciliation & accounting calculators
 
 | Method | Path | Body / query | Purpose |

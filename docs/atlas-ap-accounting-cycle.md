@@ -114,7 +114,10 @@ RLS coverage:
 - Realized FX journal posting: `POST /v1/accounting/fx-realizations` returns the gain/loss and posts a
   balanced `fx_realization` GL journal (gain → credit `7200`, loss → debit `7201`, against clearing `2100`),
   persisted when `DATABASE_URL` is set. Covered by fast and live tests.
+- Debit memos: `POST /v1/debit-memos` issues a buyer-side vendor debit memo (e.g. returns) and posts a
+  balanced `debit_memo` GL journal (Dr AP `2100`, Cr purchase returns `5100`), persisted when `DATABASE_URL`
+  is set; `GET /v1/debit-memos` lists them. Covered by fast and live tests.
 
 ## Pending
-- Add debit memos.
+- Bank statement import parsers, remittance advice, and payment-file generation remain future work.
 - Add bank statement import format parsers.

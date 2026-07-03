@@ -202,6 +202,21 @@ export const creditMemos = pgTable(
   (t) => [index("credit_memos_tenant_vendor_idx").on(t.tenantId, t.vendorId), tenantPolicy(t)],
 ).enableRLS();
 
+export const debitMemos = pgTable(
+  "debit_memos",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    vendorId: uuid("vendor_id").references(() => vendors.id),
+    amount: numeric("amount", { precision: 14, scale: 2 }).notNull(),
+    currency: text("currency").notNull(),
+    reason: text("reason"),
+    status: text("status").notNull().default("issued"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("debit_memos_tenant_vendor_idx").on(t.tenantId, t.vendorId), tenantPolicy(t)],
+).enableRLS();
+
 export const creditMemoApplications = pgTable(
   "credit_memo_applications",
   {

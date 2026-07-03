@@ -262,6 +262,26 @@ export const createCreditMemoSchema = z.object({
 });
 export type CreateCreditMemoInput = z.infer<typeof createCreditMemoSchema>;
 
+export const debitMemoRecordSchema = z.object({
+  id: uuidSchema,
+  tenantId: uuidSchema,
+  vendorId: uuidSchema.optional(),
+  amount: z.number().nonnegative(),
+  currency: z.string().length(3),
+  reason: z.string().optional(),
+  status: z.string(),
+  createdAt: z.string(),
+});
+export type DebitMemoRecord = z.infer<typeof debitMemoRecordSchema>;
+
+export const createDebitMemoSchema = z.object({
+  vendorId: uuidSchema.optional(),
+  amount: z.number().positive(),
+  currency: z.string().length(3).default("USD"),
+  reason: z.string().optional(),
+});
+export type CreateDebitMemoInput = z.infer<typeof createDebitMemoSchema>;
+
 export const partialPaymentRecordSchema = z.object({
   id: uuidSchema,
   tenantId: uuidSchema,
