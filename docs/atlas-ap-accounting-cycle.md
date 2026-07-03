@@ -99,7 +99,11 @@ RLS coverage:
   to `posted` whose posting date falls in a closed period is rejected (`409 accounting_period_closed`) and no
   journal is written. Covered by fast and live tests.
 
+- Persisted credit memos (`/v1/credit-memos`) and a persisted application flow
+  (`POST /v1/invoices/:id/apply-credits`) that records `credit_memo_applications` and reduces/closes memos
+  by their applied amount. Covered by fast and live tests.
+
 ## Pending
-- Add credit-memo and partial-payment execution/persistence (currently calculation-only).
+- Add partial-payment execution/persistence (currently calculation-only).
 - Add debit memos, withholding tax, and multi-currency realized FX journal posting.
 - Add bank statement import format parsers.

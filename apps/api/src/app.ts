@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { createAccountingPeriodSchema, createGoodsReceiptSchema, createInvoiceSchema, createPurchaseOrderSchema, createVendorSchema, updateVendorSchema } from "@atlas/contracts";
+import { createAccountingPeriodSchema, createCreditMemoSchema, createGoodsReceiptSchema, createInvoiceSchema, createPurchaseOrderSchema, createVendorSchema, updateVendorSchema } from "@atlas/contracts";
 import { Supervisor } from "@atlas/agents";
 import { repository } from "./repository";
 import { ClosedPeriodError } from "./errors";
@@ -137,6 +137,17 @@ v1.post("/accounting-periods/:id/close", async (c) => {
 
 v1.post("/accounting-periods/:id/reopen", async (c) => {
   return c.json({ period: await repository.setPeriodStatus(c.get("tenant"), c.req.param("id"), "open") });
+});
+
+v1.post("/credit-memos", async (c) => {
+  const input = createCreditMemoSchema.parse(await c.req.json());
+  return c.json({ creditMemo: await repository.createCreditMemo(c.get("tenant"), input) }, 201);
+});
+
+v1.get("/credit-memos", async (c) => c.json({ creditMemos: await repository.listCreditMemos(c.get("tenant")) }));
+
+v1.post("/invoices/:id/apply-credits", async (c) => {
+  return c.json({ result: await repository.applyAvailableCredits(c.get("tenant"), c.req.param("id")) });
 });
 
 v1.post("/webhooks/email-inbound", async (c) => {

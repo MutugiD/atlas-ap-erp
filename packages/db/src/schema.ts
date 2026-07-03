@@ -187,6 +187,33 @@ export const payments = pgTable(
   (t) => [index("payments_tenant_status_idx").on(t.tenantId, t.status), tenantPolicy(t)],
 ).enableRLS();
 
+export const creditMemos = pgTable(
+  "credit_memos",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    vendorId: uuid("vendor_id").references(() => vendors.id),
+    amount: numeric("amount", { precision: 14, scale: 2 }).notNull(),
+    currency: text("currency").notNull(),
+    status: text("status").notNull().default("available"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("credit_memos_tenant_vendor_idx").on(t.tenantId, t.vendorId), tenantPolicy(t)],
+).enableRLS();
+
+export const creditMemoApplications = pgTable(
+  "credit_memo_applications",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    creditMemoId: uuid("credit_memo_id").notNull().references(() => creditMemos.id),
+    invoiceId: uuid("invoice_id").notNull().references(() => invoices.id),
+    amountApplied: numeric("amount_applied", { precision: 14, scale: 2 }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("credit_memo_applications_tenant_invoice_idx").on(t.tenantId, t.invoiceId), tenantPolicy(t)],
+).enableRLS();
+
 export const bankTransactions = pgTable(
   "bank_transactions",
   {

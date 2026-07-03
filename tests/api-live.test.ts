@@ -117,6 +117,28 @@ describeLive("Atlas AP live Postgres persistence", () => {
     await appPool.end();
   });
 
+  test("credit memos apply to an invoice and persist balances (RLS-scoped)", async () => {
+    const appPool = await freshSchema();
+    const repo = new PostgresInvoiceRepository({ pool: appPool });
+
+    const vendor = await repo.createVendor(ctxA, { name: "Credit Vendor", currency: "USD", active: true, holdPayments: false, paymentTermsDays: 30, defaultExpenseAccount: "6100" });
+    const { invoice } = await repo.createInvoice(ctxA, { vendorId: vendor.id, invoiceNumber: "CM-L", total: 1000, currency: "USD" });
+    const memoA = await repo.createCreditMemo(ctxA, { vendorId: vendor.id, amount: 300, currency: "USD" });
+    const memoB = await repo.createCreditMemo(ctxA, { vendorId: vendor.id, amount: 800, currency: "USD" });
+
+    expect(await repo.listCreditMemos(ctxB)).toHaveLength(0); // RLS
+
+    const result = await repo.applyAvailableCredits(ctxA, invoice.id);
+    expect(result.netPayable).toBe(0);
+    expect(await scalar(appPool, tenantA, "select count(*)::int from credit_memo_applications")).toBe(2);
+
+    const memos = await repo.listCreditMemos(ctxA);
+    expect(memos.find((m) => m.id === memoA.id)?.status).toBe("applied");
+    expect(memos.find((m) => m.id === memoB.id)?.amount).toBe(100);
+
+    await appPool.end();
+  });
+
   test("posting transition persists a balanced invoice_posting journal", async () => {
     const appPool = await freshSchema();
     const repo = new PostgresInvoiceRepository({ pool: appPool });
@@ -140,14 +162,20 @@ async function freshSchema(): Promise<Pool> {
   await owner.query(`
     drop table if exists reconciliations, bank_transactions, payments, payment_runs,
       gl_journal_lines, gl_journal_entries, goods_receipts, accounting_periods,
-      agent_events, invoices, purchase_orders, vendors, tenants cascade;
+      credit_memo_applications, credit_memos, agent_events, invoices,
+      purchase_orders, vendors, tenants cascade;
     drop role if exists app_user;
   `);
-  await owner.query(readFileSync("packages/db/migrations/0000_initial_rls.sql", "utf8"));
-  await owner.query(readFileSync("packages/db/migrations/0001_api_app_role.sql", "utf8"));
-  await owner.query(readFileSync("packages/db/migrations/0002_vendor_master.sql", "utf8"));
-  await owner.query(readFileSync("packages/db/migrations/0003_po_goods_receipts.sql", "utf8"));
-  await owner.query(readFileSync("packages/db/migrations/0004_accounting_periods.sql", "utf8"));
+  for (const m of [
+    "0000_initial_rls",
+    "0001_api_app_role",
+    "0002_vendor_master",
+    "0003_po_goods_receipts",
+    "0004_accounting_periods",
+    "0005_credit_memos",
+  ]) {
+    await owner.query(readFileSync(`packages/db/migrations/${m}.sql`, "utf8"));
+  }
   await owner.query("insert into tenants (id, name) values ($1, $2), ($3, $4)", [tenantA, "Tenant A", tenantB, "Tenant B"]);
   await owner.end();
   return new Pool({ connectionString: appRoleUrl(ownerUrl) });

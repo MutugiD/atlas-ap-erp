@@ -2,10 +2,12 @@ import {
   type AccountingPeriodRecord,
   type AgentEvent,
   type CreateAccountingPeriodInput,
+  type CreateCreditMemoInput,
   type CreateGoodsReceiptInput,
   type CreateInvoiceInput,
   type CreatePurchaseOrderInput,
   type CreateVendorInput,
+  type CreditMemoRecord,
   type GoodsReceiptRecord,
   type Invoice,
   type PurchaseOrder,
@@ -30,7 +32,7 @@ import {
   type Payment,
   type PaymentRun,
 } from "@atlas/accounting";
-import { toAccountingInvoice, toGoodsReceipt, toPurchaseOrderAccounting, toVendorMaster, vendorMastersForInvoices } from "./mappers";
+import { toAccountingCreditMemo, toAccountingInvoice, toGoodsReceipt, toPurchaseOrderAccounting, toVendorMaster, vendorMastersForInvoices } from "./mappers";
 import { ClosedPeriodError } from "./errors";
 import { PostgresInvoiceRepository } from "./postgres-repository";
 
@@ -64,6 +66,9 @@ export interface InvoiceRepository extends AgentRepository {
   createAccountingPeriod(ctx: TenantContext, input: CreateAccountingPeriodInput): Promise<AccountingPeriodRecord>;
   listAccountingPeriods(ctx: TenantContext): Promise<AccountingPeriodRecord[]>;
   setPeriodStatus(ctx: TenantContext, id: string, status: "open" | "closed"): Promise<AccountingPeriodRecord>;
+  createCreditMemo(ctx: TenantContext, input: CreateCreditMemoInput): Promise<CreditMemoRecord>;
+  listCreditMemos(ctx: TenantContext): Promise<CreditMemoRecord[]>;
+  applyAvailableCredits(ctx: TenantContext, invoiceId: string): Promise<ReturnType<typeof applyCreditMemos>>;
 }
 
 export class InMemoryInvoiceRepository implements InvoiceRepository {
@@ -74,6 +79,7 @@ export class InMemoryInvoiceRepository implements InvoiceRepository {
   private readonly purchaseOrders = new Map<string, PurchaseOrder>();
   private readonly goodsReceipts: GoodsReceiptRecord[] = [];
   private readonly periods = new Map<string, AccountingPeriodRecord>();
+  private readonly creditMemos = new Map<string, CreditMemoRecord>();
 
   async createInvoice(ctx: TenantContext, input: CreateInvoiceInput) {
     const id = crypto.randomUUID();
@@ -225,6 +231,32 @@ export class InMemoryInvoiceRepository implements InvoiceRepository {
     const updated: AccountingPeriodRecord = { ...period, status };
     this.periods.set(id, updated);
     return updated;
+  }
+
+  async createCreditMemo(ctx: TenantContext, input: CreateCreditMemoInput) {
+    const memo: CreditMemoRecord = { id: crypto.randomUUID(), tenantId: ctx.tenantId, status: "available", createdAt: now(), ...input };
+    this.creditMemos.set(memo.id, memo);
+    return memo;
+  }
+
+  async listCreditMemos(ctx: TenantContext) {
+    return [...this.creditMemos.values()].filter((memo) => memo.tenantId === ctx.tenantId);
+  }
+
+  async applyAvailableCredits(ctx: TenantContext, invoiceId: string) {
+    const invoice = await this.getInvoice(ctx, invoiceId);
+    if (!invoice) throw new Error("Invoice not found");
+    const available = (await this.listCreditMemos(ctx)).filter(
+      (memo) => memo.status === "available" && memo.vendorId === invoice.vendorId,
+    );
+    const result = applyCreditMemos({ invoice: toAccountingInvoice(invoice), creditMemos: available.map(toAccountingCreditMemo) });
+    for (const memo of available) {
+      const applied = result.applications.filter((a) => a.creditMemoId === memo.id).reduce((sum, a) => sum + a.amountApplied, 0);
+      if (applied <= 0) continue;
+      const remaining = roundMoney(memo.amount - applied);
+      this.creditMemos.set(memo.id, { ...memo, amount: remaining, status: remaining <= 0 ? "applied" : "available" });
+    }
+    return result;
   }
 
   async addEvent(_ctx: TenantContext, event: Omit<AgentEvent, "id" | "createdAt">) {
