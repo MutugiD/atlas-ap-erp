@@ -92,3 +92,84 @@ export const agentEvents = pgTable(
   (t) => [index("agent_events_invoice_idx").on(t.tenantId, t.invoiceId), tenantPolicy(t)],
 ).enableRLS();
 
+export const glJournalEntries = pgTable(
+  "gl_journal_entries",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    source: text("source").notNull(),
+    postingDate: timestamp("posting_date", { withTimezone: true }).notNull(),
+    currency: text("currency").notNull(),
+    balanced: text("balanced").notNull().default("true"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("gl_journal_entries_tenant_idx").on(t.tenantId), tenantPolicy(t)],
+).enableRLS();
+
+export const glJournalLines = pgTable(
+  "gl_journal_lines",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    journalEntryId: uuid("journal_entry_id").notNull().references(() => glJournalEntries.id),
+    invoiceId: uuid("invoice_id").references(() => invoices.id),
+    account: text("account").notNull(),
+    debit: numeric("debit", { precision: 14, scale: 2 }).notNull().default("0"),
+    credit: numeric("credit", { precision: 14, scale: 2 }).notNull().default("0"),
+    memo: text("memo").notNull(),
+  },
+  (t) => [index("gl_journal_lines_tenant_journal_idx").on(t.tenantId, t.journalEntryId), tenantPolicy(t)],
+).enableRLS();
+
+export const paymentRuns = pgTable(
+  "payment_runs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    scheduledDate: timestamp("scheduled_date", { withTimezone: true }).notNull(),
+    status: text("status").notNull().default("created"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("payment_runs_tenant_idx").on(t.tenantId), tenantPolicy(t)],
+).enableRLS();
+
+export const payments = pgTable(
+  "payments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    paymentRunId: uuid("payment_run_id").notNull().references(() => paymentRuns.id),
+    invoiceId: uuid("invoice_id").notNull().references(() => invoices.id),
+    vendorId: uuid("vendor_id").references(() => vendors.id),
+    amount: numeric("amount", { precision: 14, scale: 2 }).notNull(),
+    currency: text("currency").notNull(),
+    status: text("status").notNull().default("scheduled"),
+  },
+  (t) => [index("payments_tenant_status_idx").on(t.tenantId, t.status), tenantPolicy(t)],
+).enableRLS();
+
+export const bankTransactions = pgTable(
+  "bank_transactions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    amount: numeric("amount", { precision: 14, scale: 2 }).notNull(),
+    currency: text("currency").notNull(),
+    valueDate: timestamp("value_date", { withTimezone: true }).notNull(),
+    reference: text("reference").notNull(),
+    reconciliationId: uuid("reconciliation_id"),
+  },
+  (t) => [index("bank_transactions_tenant_idx").on(t.tenantId), tenantPolicy(t)],
+).enableRLS();
+
+export const reconciliations = pgTable(
+  "reconciliations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    status: text("status").notNull().default("open"),
+    result: jsonb("result").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("reconciliations_tenant_idx").on(t.tenantId), tenantPolicy(t)],
+).enableRLS();

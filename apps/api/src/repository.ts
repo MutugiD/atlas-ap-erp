@@ -1,5 +1,16 @@
 import { type AgentEvent, type CreateInvoiceInput, type Invoice, type TenantContext } from "@atlas/contracts";
 import type { AgentRepository } from "@atlas/agents";
+import {
+  buildInvoicePostingJournal,
+  createPaymentRun,
+  reconcileBankTransactions,
+  type AccountingInvoice,
+  type BankTransaction,
+  type JournalEntry,
+  type Payment,
+  type PaymentRun,
+  type VendorMaster,
+} from "@atlas/accounting";
 
 const now = () => new Date().toISOString();
 
@@ -10,11 +21,15 @@ export interface InvoiceRepository extends AgentRepository {
   listExceptions(ctx: TenantContext): Promise<Invoice[]>;
   listEvents(ctx: TenantContext, invoiceId: string): Promise<AgentEvent[]>;
   humanDecision(ctx: TenantContext, invoiceId: string, action: "approve" | "reject"): Promise<Invoice>;
+  previewPosting(ctx: TenantContext, invoiceId: string): Promise<JournalEntry>;
+  createPaymentRun(ctx: TenantContext, scheduledDate: string): Promise<PaymentRun>;
+  reconcilePayments(ctx: TenantContext, bankTransactions: BankTransaction[]): Promise<ReturnType<typeof reconcileBankTransactions>>;
 }
 
 export class InMemoryInvoiceRepository implements InvoiceRepository {
   private readonly invoices = new Map<string, Invoice>();
   private readonly events: AgentEvent[] = [];
+  private readonly payments = new Map<string, Payment[]>();
 
   async createInvoice(ctx: TenantContext, input: CreateInvoiceInput) {
     const id = crypto.randomUUID();
@@ -88,7 +103,76 @@ export class InMemoryInvoiceRepository implements InvoiceRepository {
     });
     return updated;
   }
+
+  async previewPosting(ctx: TenantContext, invoiceId: string) {
+    const invoice = await this.getInvoice(ctx, invoiceId);
+    if (!invoice) throw new Error("Invoice not found");
+    return buildInvoicePostingJournal({
+      tenantId: ctx.tenantId,
+      invoice: toAccountingInvoice(invoice),
+      vendor: toVendorMaster(invoice),
+    });
+  }
+
+  async createPaymentRun(ctx: TenantContext, scheduledDate: string) {
+    const invoices = (await this.listInvoices(ctx)).map(toAccountingInvoice);
+    const vendors = invoices.map((invoice) => ({
+      id: invoice.vendorId,
+      name: invoice.vendorName,
+      taxId: "LOCAL-TAX-ID",
+      active: true,
+      paymentTermsDays: 30,
+      defaultExpenseAccount: "6100",
+      currency: invoice.currency,
+    }));
+    const run = createPaymentRun({ tenantId: ctx.tenantId, invoices, vendors, scheduledDate });
+    this.payments.set(ctx.tenantId, [...(this.payments.get(ctx.tenantId) ?? []), ...run.payments]);
+    return run;
+  }
+
+  async reconcilePayments(ctx: TenantContext, bankTransactions: BankTransaction[]) {
+    return reconcileBankTransactions({ payments: this.payments.get(ctx.tenantId) ?? [], bankTransactions });
+  }
 }
 
 export const repository = new InMemoryInvoiceRepository();
 
+function toAccountingInvoice(invoice: Invoice): AccountingInvoice {
+  const subtotal = invoice.extracted?.subtotal ?? invoice.total;
+  const tax = invoice.extracted?.tax ?? 0;
+  const lines = invoice.extracted?.lines ?? [{ description: invoice.vendorName ?? "Invoice", quantity: 1, unitPrice: subtotal, total: subtotal }];
+  return {
+    id: invoice.id,
+    vendorId: invoice.vendorId ?? `vendor:${invoice.vendorName ?? "unknown"}`,
+    vendorName: invoice.vendorName ?? "Unknown vendor",
+    invoiceNumber: invoice.invoiceNumber ?? invoice.id.slice(0, 8),
+    invoiceDate: invoice.extracted?.invoiceDate ?? invoice.createdAt.slice(0, 10),
+    postingDate: invoice.updatedAt.slice(0, 10),
+    dueDate: invoice.updatedAt.slice(0, 10),
+    currency: invoice.currency,
+    subtotal,
+    tax,
+    total: invoice.total,
+    lines,
+    status: toAccountingStatus(invoice.status),
+    poId: invoice.poId,
+  };
+}
+
+function toVendorMaster(invoice: Pick<Invoice, "vendorId" | "vendorName" | "currency"> & { id?: string }): VendorMaster {
+  return {
+    id: invoice.vendorId ?? `vendor:${invoice.vendorName ?? "unknown"}`,
+    name: invoice.vendorName ?? "Unknown vendor",
+    taxId: "LOCAL-TAX-ID",
+    active: true,
+    paymentTermsDays: 30,
+    defaultExpenseAccount: "6100",
+    currency: invoice.currency,
+  };
+}
+
+function toAccountingStatus(status: Invoice["status"]): AccountingInvoice["status"] {
+  if (status === "rejected" || status === "coded") return "exception";
+  if (status === "extracted" || status === "received") return "received";
+  return status;
+}

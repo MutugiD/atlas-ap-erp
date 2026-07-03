@@ -11,6 +11,7 @@
     "baseUrl": ".",
     "paths": {
       "@atlas/contracts": ["packages/contracts/src/index.ts"],
+      "@atlas/accounting": ["packages/accounting/src/index.ts"],
       "@atlas/agents": ["packages/agents/src/index.ts"],
       "@atlas/db": ["packages/db/src/index.ts"],
       "@atlas/support-contracts": ["packages/support-contracts/src/index.ts"],

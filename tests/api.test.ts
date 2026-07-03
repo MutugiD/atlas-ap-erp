@@ -52,5 +52,45 @@ describe("Hono API", () => {
     });
     expect(response.status).toBe(202);
   });
-});
 
+  test("creates posting preview, payment run, and bank reconciliation for payable invoice", async () => {
+    const create = await app.request("/v1/invoices", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ vendorName: "Nairobi Office Supplies", invoiceNumber: "PAY-1", total: 1200, currency: "USD" }),
+    });
+    const invoice = (await create.json()).invoice;
+    const reprocess = await app.request(`/v1/invoices/${invoice.id}/reprocess`, { method: "POST", headers });
+    const routed = (await reprocess.json()).invoice;
+    expect(routed.status).toBe("queued_for_payment");
+
+    const preview = await app.request(`/v1/invoices/${invoice.id}/posting-preview`, { method: "POST", headers });
+    const journal = (await preview.json()).journal;
+    expect(journal.balanced).toBe(true);
+    expect(journal.entries.some((entry: { account: string; credit: number }) => entry.account === "2100" && entry.credit === 1200)).toBe(true);
+
+    const paymentRunResponse = await app.request("/v1/payment-runs", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ scheduledDate: "2026-07-20" }),
+    });
+    const paymentRun = (await paymentRunResponse.json()).paymentRun;
+    expect(paymentRun.payments.some((payment: { invoiceId: string }) => payment.invoiceId === invoice.id)).toBe(true);
+    expect(paymentRun.journal.balanced).toBe(true);
+
+    const reconciliation = await app.request("/v1/reconciliations", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        bankTransactions: [{
+          id: "bank-pay-1",
+          amount: -1200,
+          currency: "USD",
+          valueDate: "2026-07-20",
+          reference: `ACH ${invoice.id.slice(0, 8)}`,
+        }],
+      }),
+    });
+    expect((await reconciliation.json()).reconciliation.matched).toHaveLength(1);
+  });
+});

@@ -5,7 +5,7 @@ import { setTenantSql } from "../apps/api/src/tenant";
 describe("RLS", () => {
   test("migration enables RLS and tenant policies", () => {
     const migration = readFileSync("packages/db/migrations/0000_initial_rls.sql", "utf8");
-    for (const table of ["vendors", "purchase_orders", "invoices", "agent_events"]) {
+    for (const table of ["vendors", "purchase_orders", "invoices", "agent_events", "gl_journal_entries", "gl_journal_lines", "payment_runs", "payments", "bank_transactions", "reconciliations"]) {
       expect(migration).toContain(`ALTER TABLE ${table} ENABLE ROW LEVEL SECURITY`);
       expect(migration).toContain(`CREATE POLICY tenant_isolation ON ${table}`);
     }
@@ -17,4 +17,3 @@ describe("RLS", () => {
     expect(setTenantSql("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")).toContain("true");
   });
 });
-

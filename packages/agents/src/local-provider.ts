@@ -20,16 +20,18 @@ export class LocalAgentProvider implements AgentProvider {
     const total = invoice.total || 1200;
     const lowConfidence = invoice.sourceObjectKey?.includes("low-confidence") ?? false;
     const variance = invoice.sourceObjectKey?.includes("variance") ?? false;
+    const subtotal = variance ? total - 40 : total - total * 0.16;
+    const tax = variance ? 40 : total * 0.16;
     return {
       vendorName: invoice.vendorName ?? "Nairobi Office Supplies",
       invoiceNumber: invoice.invoiceNumber ?? `INV-${invoice.id.slice(0, 8)}`,
       invoiceDate: "2026-07-03",
       poNumber: invoice.poId ? `PO-${invoice.poId.slice(0, 8)}` : undefined,
       currency: invoice.currency,
-      subtotal: variance ? total - 40 : total - total * 0.16,
-      tax: variance ? 40 : total * 0.16,
+      subtotal,
+      tax,
       total,
-      lines: [{ description: "Office supplies", quantity: 1, unitPrice: total, total }],
+      lines: [{ description: "Office supplies", quantity: 1, unitPrice: subtotal, total: subtotal }],
       fieldConfidence: { vendorName: lowConfidence ? 0.65 : 0.97, total: 0.98 },
       confidence: lowConfidence ? 0.67 : 0.96,
     };
@@ -85,4 +87,3 @@ export function sumsToTotal(proposal: GlCodingProposal, total: number): boolean 
   const sum = proposal.splits.reduce((acc, split) => acc + split.amount, 0);
   return Math.abs(sum - total) < 0.01;
 }
-

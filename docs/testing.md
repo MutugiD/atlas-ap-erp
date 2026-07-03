@@ -25,6 +25,7 @@ bun.cmd run test:live-support
 The test suite covers:
 
 - Lifecycle reducer safety.
+- Real-world AP accounting cycles: data entry, vendor controls, PO matching, posting, payment run, bank reconciliation, and trial balance.
 - GL balancing.
 - Agent schema parsing.
 - Supervisor routing.

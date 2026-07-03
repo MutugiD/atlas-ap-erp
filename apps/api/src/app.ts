@@ -34,6 +34,10 @@ v1.post("/invoices/:id/reprocess", async (c) => {
   return c.json(result);
 });
 
+v1.post("/invoices/:id/posting-preview", async (c) => {
+  return c.json({ journal: await repository.previewPosting(c.get("tenant"), c.req.param("id")) });
+});
+
 v1.get("/invoices/:id/events", async (c) => {
   return c.json({ events: await repository.listEvents(c.get("tenant"), c.req.param("id")) });
 });
@@ -46,6 +50,16 @@ v1.post("/invoices/:id/approve", async (c) => {
 
 v1.post("/invoices/:id/reject", async (c) => {
   return c.json({ invoice: await repository.humanDecision(c.get("tenant"), c.req.param("id"), "reject") });
+});
+
+v1.post("/payment-runs", async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  return c.json({ paymentRun: await repository.createPaymentRun(c.get("tenant"), body.scheduledDate ?? new Date().toISOString().slice(0, 10)) }, 201);
+});
+
+v1.post("/reconciliations", async (c) => {
+  const body = await c.req.json();
+  return c.json({ reconciliation: await repository.reconcilePayments(c.get("tenant"), body.bankTransactions ?? []) });
 });
 
 v1.post("/webhooks/email-inbound", async (c) => {
@@ -62,4 +76,3 @@ v1.post("/webhooks/email-inbound", async (c) => {
 });
 
 app.route("/v1", v1);
-
