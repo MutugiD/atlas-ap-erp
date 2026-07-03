@@ -14,7 +14,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Dependency review
-        uses: actions/dependency-review-action@v4
+        uses: actions/dependency-review-action@v5
         with:
           # Block PRs that introduce known-vulnerable dependencies.
           # License compliance is handled separately by `bun run license:audit`.
