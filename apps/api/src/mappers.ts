@@ -1,13 +1,15 @@
 import {
+  type CreateInvoiceInput,
   type CreditMemoRecord,
   type GoodsReceiptRecord,
   type Invoice,
+  type InvoiceDraft,
   type ProfitabilityComputeInput,
   type ProfitabilityInputRecord,
   type PurchaseOrder,
   type Vendor,
 } from "@atlas/contracts";
-import { type AccountingInvoice, type CreditMemo, type GoodsReceipt, type PurchaseOrderAccounting, type VendorMaster } from "@atlas/accounting";
+import { type AccountingInvoice, type AccountingPeriod, type CreditMemo, type GoodsReceipt, type PurchaseOrderAccounting, type VendorMaster } from "@atlas/accounting";
 import { type ProfitabilityConfig, type ProfitabilityInput } from "@atlas/profitability";
 
 // Shared mapping from the persisted Invoice shape to the accounting-engine
@@ -45,6 +47,32 @@ export function toVendorMaster(invoice: Pick<Invoice, "vendorId" | "vendorName" 
     defaultExpenseAccount: "6100",
     currency: invoice.currency,
   };
+}
+
+// When a create request supplies subtotal + tax, build an extracted draft so the
+// invoice carries a real breakdown the data-entry controls can validate (line
+// extensions, subtotal = sum(lines), subtotal + tax = total).
+export function buildExtractedDraft(id: string, input: CreateInvoiceInput): InvoiceDraft | undefined {
+  if (input.subtotal === undefined || input.tax === undefined) return undefined;
+  const subtotal = input.subtotal;
+  return {
+    vendorName: input.vendorName ?? "Unknown vendor",
+    invoiceNumber: input.invoiceNumber ?? id.slice(0, 8),
+    invoiceDate: new Date().toISOString().slice(0, 10),
+    currency: input.currency,
+    subtotal,
+    tax: input.tax,
+    total: input.total,
+    lines: [{ description: input.vendorName ?? "Invoice", quantity: 1, unitPrice: subtotal, total: subtotal }],
+    fieldConfidence: {},
+    confidence: 1,
+  };
+}
+
+// A synthetic open period for validation when no managed accounting period
+// covers the posting date, so periods being unmanaged doesn't false-flag.
+export function openPeriod(date: string): AccountingPeriod {
+  return { id: "unmanaged", startsOn: date, endsOn: date, status: "open" };
 }
 
 export function toAccountingStatus(status: Invoice["status"]): AccountingInvoice["status"] {

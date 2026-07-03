@@ -145,6 +145,10 @@ export const createInvoiceSchema = z.object({
   currency: z.string().length(3).default("USD"),
   poId: uuidSchema.optional(),
   vendorId: uuidSchema.optional(),
+  // Optional as-entered breakdown; when both are supplied the invoice is stored
+  // with an extracted draft so the data-entry controls can validate the math.
+  subtotal: z.number().nonnegative().optional(),
+  tax: z.number().nonnegative().optional(),
 });
 export type CreateInvoiceInput = z.infer<typeof createInvoiceSchema>;
 

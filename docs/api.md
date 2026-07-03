@@ -15,7 +15,8 @@ un-scoped route.
 
 | Method | Path | Body / query | Purpose |
 |---|---|---|---|
-| POST | `/v1/invoices` | `{ vendorName?, vendorId?, invoiceNumber?, total, currency, poId?, sourceObjectKey? }` | Create an invoice. `vendorId`/`poId` are linked only if they resolve for the tenant. |
+| POST | `/v1/invoices` | `{ vendorName?, vendorId?, invoiceNumber?, total, currency, poId?, subtotal?, tax?, sourceObjectKey? }` | Create an invoice. `vendorId`/`poId` are linked only if they resolve for the tenant. When `subtotal` + `tax` are supplied, an extracted draft is stored so the data-entry controls can validate the arithmetic. |
+| POST | `/v1/invoices/:id/validate` | — | Run the data-entry controls (vendor in master, line extensions, subtotal = sum(lines), subtotal + tax = total, duplicate invoice key, open period). Returns `{ ok, findings }` — the "legit, not fake" check. |
 | GET | `/v1/invoices` | — | List invoices. |
 | GET | `/v1/invoices/:id` | — | Get one invoice. |
 | POST | `/v1/invoices/:id/reprocess` | — | Run the agent supervisor (extract → validate → match → code → route → post). |

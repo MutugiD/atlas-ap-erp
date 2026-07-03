@@ -299,6 +299,24 @@ describeLive("Atlas AP live Postgres persistence", () => {
     await appPool.end();
   });
 
+  test("data-entry validation runs against Postgres (legit vs fabricated)", async () => {
+    const appPool = await freshSchema();
+    const repo = new PostgresInvoiceRepository({ pool: appPool });
+
+    const vendor = await repo.createVendor(ctxA, { name: "Legit", currency: "USD", active: true, holdPayments: false, paymentTermsDays: 30, defaultExpenseAccount: "6100", withholdingTaxRate: 0 });
+
+    const { invoice: ok } = await repo.createInvoice(ctxA, { vendorName: "Legit", vendorId: vendor.id, invoiceNumber: "OK-L", total: 1160, currency: "USD", subtotal: 1000, tax: 160 });
+    const okValidation = await repo.validateDataEntry(ctxA, ok.id);
+    expect(okValidation.ok).toBe(true);
+
+    const { invoice: bad } = await repo.createInvoice(ctxA, { vendorName: "Legit", vendorId: vendor.id, invoiceNumber: "BAD-L", total: 1200, currency: "USD", subtotal: 1000, tax: 160 });
+    const badValidation = await repo.validateDataEntry(ctxA, bad.id);
+    expect(badValidation.ok).toBe(false);
+    expect(badValidation.findings.some((f) => f.code === "invoice_total_mismatch")).toBe(true);
+
+    await appPool.end();
+  });
+
   test("posting transition persists a balanced invoice_posting journal", async () => {
     const appPool = await freshSchema();
     const repo = new PostgresInvoiceRepository({ pool: appPool });

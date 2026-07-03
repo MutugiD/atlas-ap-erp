@@ -35,6 +35,7 @@ import {
   reconcileBankTransactions,
   roundMoney,
   threeWayMatch as runThreeWayMatch,
+  validateInvoiceDataEntry,
   type BankTransaction,
   type CreditMemo,
   type JournalEntry,
@@ -44,6 +45,8 @@ import { Pool, type PoolClient } from "pg";
 import type { InvoiceRepository, PartialPaymentExecution } from "./repository";
 import { ClosedPeriodError } from "./errors";
 import {
+  buildExtractedDraft,
+  openPeriod,
   profitabilityConfigFrom,
   toAccountingCreditMemo,
   toAccountingInvoice,
@@ -51,6 +54,7 @@ import {
   toGoodsReceipt,
   toPurchaseOrderAccounting,
   toVendorMaster,
+  vendorToMaster,
   vendorMastersForInvoices,
 } from "./mappers";
 
@@ -110,11 +114,12 @@ export class PostgresInvoiceRepository implements InvoiceRepository {
           vendorName = vendorName ?? String(vendor.rows[0].name);
         }
       }
+      const extracted = buildExtractedDraft(id, input);
       const result = await client.query(
-        `insert into invoices (id, tenant_id, vendor_id, po_id, source_object_key, invoice_number, vendor_name, status, total, currency)
-         values ($1,$2,$3,$4,$5,$6,$7,'received',$8,$9)
+        `insert into invoices (id, tenant_id, vendor_id, po_id, source_object_key, invoice_number, vendor_name, status, total, currency, extracted)
+         values ($1,$2,$3,$4,$5,$6,$7,'received',$8,$9,$10::jsonb)
          returning *`,
-        [id, ctx.tenantId, vendorId, poId, input.sourceObjectKey ?? null, input.invoiceNumber ?? null, vendorName, String(input.total), input.currency],
+        [id, ctx.tenantId, vendorId, poId, input.sourceObjectKey ?? null, input.invoiceNumber ?? null, vendorName, String(input.total), input.currency, extracted ? JSON.stringify(extracted) : null],
       );
       return rowToInvoice(result.rows[0]);
     });
@@ -125,6 +130,35 @@ export class PostgresInvoiceRepository implements InvoiceRepository {
     return this.tx(ctx.tenantId, async (client) => {
       const result = await client.query("select * from invoices where tenant_id = $1 order by created_at asc", [ctx.tenantId]);
       return result.rows.map(rowToInvoice);
+    });
+  }
+
+  async validateDataEntry(ctx: TenantContext, invoiceId: string) {
+    return this.tx(ctx.tenantId, async (client) => {
+      const invoiceResult = await client.query("select * from invoices where tenant_id = $1 and id = $2 limit 1", [ctx.tenantId, invoiceId]);
+      if (!invoiceResult.rowCount) throw new Error("Invoice not found");
+      const invoice = rowToInvoice(invoiceResult.rows[0]);
+      const acct = toAccountingInvoice(invoice);
+
+      let vendor;
+      if (invoice.vendorId) {
+        const vendorResult = await client.query("select * from vendors where tenant_id = $1 and id = $2 limit 1", [ctx.tenantId, invoice.vendorId]);
+        vendor = vendorResult.rows[0] ? vendorToMaster(rowToVendor(vendorResult.rows[0])) : undefined;
+      }
+
+      const othersResult = await client.query("select * from invoices where tenant_id = $1 and id <> $2", [ctx.tenantId, invoiceId]);
+      const existingInvoiceKeys = othersResult.rows.map(rowToInvoice).map((other) => { const a = toAccountingInvoice(other); return `${a.vendorId}:${a.invoiceNumber}`; });
+
+      const periodResult = await client.query(
+        "select id, starts_on, ends_on, status from accounting_periods where tenant_id = $1 and starts_on <= $2 and ends_on >= $2 limit 1",
+        [ctx.tenantId, acct.postingDate],
+      );
+      const periodRow = periodResult.rows[0];
+      const period = periodRow
+        ? { id: String(periodRow.id), startsOn: toDateString(periodRow.starts_on), endsOn: toDateString(periodRow.ends_on), status: periodRow.status as "open" | "closed" }
+        : openPeriod(acct.postingDate);
+
+      return validateInvoiceDataEntry({ invoice: acct, vendor, period, existingInvoiceKeys });
     });
   }
 

@@ -42,6 +42,7 @@ import {
   reconcileBankTransactions,
   roundMoney,
   threeWayMatch as runThreeWayMatch,
+  validateInvoiceDataEntry,
   type BankTransaction,
   type CreditMemo,
   type JournalEntry,
@@ -49,6 +50,8 @@ import {
   type PaymentRun,
 } from "@atlas/accounting";
 import {
+  buildExtractedDraft,
+  openPeriod,
   profitabilityConfigFrom,
   toAccountingCreditMemo,
   toAccountingInvoice,
@@ -56,6 +59,7 @@ import {
   toGoodsReceipt,
   toPurchaseOrderAccounting,
   toVendorMaster,
+  vendorToMaster,
   vendorMastersForInvoices,
 } from "./mappers";
 import { ClosedPeriodError } from "./errors";
@@ -66,6 +70,7 @@ const now = () => new Date().toISOString();
 // The AP repository: invoices, events, accounting operations, and vendor master.
 export interface InvoiceRepository extends AgentRepository {
   createInvoice(ctx: TenantContext, input: CreateInvoiceInput): Promise<{ invoice: Invoice; uploadUrl: string }>;
+  validateDataEntry(ctx: TenantContext, invoiceId: string): Promise<ReturnType<typeof validateInvoiceDataEntry>>;
   listInvoices(ctx: TenantContext): Promise<Invoice[]>;
   getInvoice(ctx: TenantContext, id: string): Promise<Invoice | undefined>;
   listExceptions(ctx: TenantContext): Promise<Invoice[]>;
@@ -142,11 +147,28 @@ export class InMemoryInvoiceRepository implements InvoiceRepository {
       status: "received",
       total: input.total,
       currency: input.currency,
+      extracted: buildExtractedDraft(id, input),
       createdAt: now(),
       updatedAt: now(),
     };
     this.invoices.set(id, invoice);
     return { invoice, uploadUrl: `s3://local-atlas-ap/${ctx.tenantId}/${id}.pdf` };
+  }
+
+  async validateDataEntry(ctx: TenantContext, invoiceId: string) {
+    const invoice = await this.getInvoice(ctx, invoiceId);
+    if (!invoice) throw new Error("Invoice not found");
+    const vendor = invoice.vendorId ? await this.getVendor(ctx, invoice.vendorId) : undefined;
+    const acct = toAccountingInvoice(invoice);
+    const existingInvoiceKeys = (await this.listInvoices(ctx))
+      .filter((other) => other.id !== invoiceId)
+      .map((other) => { const a = toAccountingInvoice(other); return `${a.vendorId}:${a.invoiceNumber}`; });
+    return validateInvoiceDataEntry({
+      invoice: acct,
+      vendor: vendor ? vendorToMaster(vendor) : undefined,
+      period: this.periodForDate(ctx, acct.postingDate) ?? openPeriod(acct.postingDate),
+      existingInvoiceKeys,
+    });
   }
 
   async createVendor(ctx: TenantContext, input: CreateVendorInput) {

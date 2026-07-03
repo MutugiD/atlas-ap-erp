@@ -305,6 +305,39 @@ describe("Hono API", () => {
     expect((await list.json()).debitMemos).toHaveLength(1);
   });
 
+  test("validates a legit invoice and flags a fabricated / duplicate one", async () => {
+    const vHeaders = { ...headers, "x-tenant-id": "aaaaaaaa-aaaa-4aaa-8aaa-a11d00000001" };
+    const vendor = await createVendorFor(vHeaders, "Legit Vendor");
+
+    const legit = (await (await app.request("/v1/invoices", {
+      method: "POST",
+      headers: vHeaders,
+      body: JSON.stringify({ vendorName: "Legit Vendor", vendorId: vendor.id, invoiceNumber: "OK-1", total: 1160, currency: "USD", subtotal: 1000, tax: 160 }),
+    })).json()).invoice;
+    const okValidation = (await (await app.request(`/v1/invoices/${legit.id}/validate`, { method: "POST", headers: vHeaders })).json()).validation;
+    expect(okValidation.ok).toBe(true);
+    expect(okValidation.findings.every((f: { severity: string }) => f.severity !== "error")).toBe(true);
+
+    // Fabricated: subtotal + tax != total.
+    const fake = (await (await app.request("/v1/invoices", {
+      method: "POST",
+      headers: vHeaders,
+      body: JSON.stringify({ vendorName: "Legit Vendor", vendorId: vendor.id, invoiceNumber: "BAD-1", total: 1200, currency: "USD", subtotal: 1000, tax: 160 }),
+    })).json()).invoice;
+    const badValidation = (await (await app.request(`/v1/invoices/${fake.id}/validate`, { method: "POST", headers: vHeaders })).json()).validation;
+    expect(badValidation.ok).toBe(false);
+    expect(badValidation.findings.some((f: { code: string }) => f.code === "invoice_total_mismatch")).toBe(true);
+
+    // Duplicate invoice number for the same vendor.
+    const dup = (await (await app.request("/v1/invoices", {
+      method: "POST",
+      headers: vHeaders,
+      body: JSON.stringify({ vendorName: "Legit Vendor", vendorId: vendor.id, invoiceNumber: "OK-1", total: 1160, currency: "USD", subtotal: 1000, tax: 160 }),
+    })).json()).invoice;
+    const dupValidation = (await (await app.request(`/v1/invoices/${dup.id}/validate`, { method: "POST", headers: vHeaders })).json()).validation;
+    expect(dupValidation.findings.some((f: { code: string }) => f.code === "duplicate_invoice")).toBe(true);
+  });
+
   test("serves accounting credit, partial payment, aging, and FX endpoints", async () => {
     const create = await app.request("/v1/invoices", {
       method: "POST",
