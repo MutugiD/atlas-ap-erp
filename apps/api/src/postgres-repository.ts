@@ -6,8 +6,10 @@ import {
   type CreateGoodsReceiptInput,
   type CreateInvoiceInput,
   type CreatePurchaseOrderInput,
+  type CreateDebitMemoInput,
   type CreateVendorInput,
   type CreditMemoRecord,
+  type DebitMemoRecord,
   type GoodsReceiptRecord,
   type Invoice,
   type PartialPaymentRecord,
@@ -19,6 +21,7 @@ import {
 import {
   applyCreditMemos,
   buildApAging,
+  buildDebitMemoJournal,
   buildInvoicePostingJournal,
   buildRealizedFxJournal,
   calculateRealizedFx,
@@ -443,6 +446,31 @@ export class PostgresInvoiceRepository implements InvoiceRepository {
     });
   }
 
+  async createDebitMemo(ctx: TenantContext, input: CreateDebitMemoInput) {
+    return this.tx(ctx.tenantId, async (client) => {
+      let vendorId: string | null = null;
+      if (input.vendorId) {
+        const vendor = await client.query("select id from vendors where id = $1 and tenant_id = $2", [input.vendorId, ctx.tenantId]);
+        vendorId = vendor.rowCount ? input.vendorId : null;
+      }
+      const result = await client.query(
+        "insert into debit_memos (tenant_id, vendor_id, amount, currency, reason, status) values ($1,$2,$3,$4,$5,'issued') returning *",
+        [ctx.tenantId, vendorId, String(input.amount), input.currency, input.reason ?? null],
+      );
+      const debitMemo = rowToDebitMemo(result.rows[0]);
+      const journal = buildDebitMemoJournal({ tenantId: ctx.tenantId, debitMemoId: debitMemo.id, amount: debitMemo.amount, currency: debitMemo.currency, postingDate: new Date().toISOString().slice(0, 10) });
+      await persistJournal(client, ctx.tenantId, journal);
+      return { debitMemo, journal };
+    });
+  }
+
+  async listDebitMemos(ctx: TenantContext) {
+    return this.tx(ctx.tenantId, async (client) => {
+      const result = await client.query("select * from debit_memos where tenant_id = $1 order by created_at asc", [ctx.tenantId]);
+      return result.rows.map(rowToDebitMemo);
+    });
+  }
+
   async executePartialPayment(ctx: TenantContext, invoiceId: string, requestedAmount: number): Promise<PartialPaymentExecution> {
     return this.tx(ctx.tenantId, async (client) => {
       const invoiceResult = await client.query("select * from invoices where tenant_id = $1 and id = $2 limit 1", [ctx.tenantId, invoiceId]);
@@ -605,6 +633,19 @@ function toDateString(value: unknown): string {
     return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
   }
   return String(value);
+}
+
+function rowToDebitMemo(row: Record<string, unknown>): DebitMemoRecord {
+  return {
+    id: String(row.id),
+    tenantId: String(row.tenant_id),
+    vendorId: row.vendor_id ? String(row.vendor_id) : undefined,
+    amount: Number(row.amount),
+    currency: String(row.currency),
+    reason: row.reason ? String(row.reason) : undefined,
+    status: String(row.status),
+    createdAt: new Date(row.created_at as string).toISOString(),
+  };
 }
 
 function rowToPartialPayment(row: Record<string, unknown>): PartialPaymentRecord {

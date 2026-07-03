@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { createAccountingPeriodSchema, createCreditMemoSchema, createGoodsReceiptSchema, createInvoiceSchema, createPurchaseOrderSchema, createVendorSchema, executePartialPaymentSchema, updateVendorSchema } from "@atlas/contracts";
+import { createAccountingPeriodSchema, createCreditMemoSchema, createDebitMemoSchema, createGoodsReceiptSchema, createInvoiceSchema, createPurchaseOrderSchema, createVendorSchema, executePartialPaymentSchema, updateVendorSchema } from "@atlas/contracts";
 import { Supervisor } from "@atlas/agents";
 import { repository } from "./repository";
 import { ClosedPeriodError } from "./errors";
@@ -145,6 +145,13 @@ v1.post("/credit-memos", async (c) => {
 });
 
 v1.get("/credit-memos", async (c) => c.json({ creditMemos: await repository.listCreditMemos(c.get("tenant")) }));
+
+v1.post("/debit-memos", async (c) => {
+  const input = createDebitMemoSchema.parse(await c.req.json());
+  return c.json(await repository.createDebitMemo(c.get("tenant"), input), 201);
+});
+
+v1.get("/debit-memos", async (c) => c.json({ debitMemos: await repository.listDebitMemos(c.get("tenant")) }));
 
 v1.post("/invoices/:id/apply-credits", async (c) => {
   return c.json({ result: await repository.applyAvailableCredits(c.get("tenant"), c.req.param("id")) });

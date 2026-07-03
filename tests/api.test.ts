@@ -285,6 +285,26 @@ describe("Hono API", () => {
     expect(run.journal.entries.some((e) => e.account === "1000" && e.credit === 900)).toBe(true);
   });
 
+  test("issuing a debit memo posts a balanced debit_memo journal", async () => {
+    const dHeaders = { ...headers, "x-tenant-id": "aaaaaaaa-aaaa-4aaa-8aaa-000000000004" };
+    const vendor = await createVendorFor(dHeaders, "Return Vendor");
+    const res = await app.request("/v1/debit-memos", {
+      method: "POST",
+      headers: dHeaders,
+      body: JSON.stringify({ vendorId: vendor.id, amount: 250, currency: "USD", reason: "Returned goods" }),
+    });
+    expect(res.status).toBe(201);
+    const body = await res.json();
+    expect(body.debitMemo.status).toBe("issued");
+    expect(body.journal.balanced).toBe(true);
+    expect(body.journal.source).toBe("debit_memo");
+    expect(body.journal.entries.some((e: { account: string; debit: number }) => e.account === "2100" && e.debit === 250)).toBe(true);
+    expect(body.journal.entries.some((e: { account: string; credit: number }) => e.account === "5100" && e.credit === 250)).toBe(true);
+
+    const list = await app.request("/v1/debit-memos", { headers: dHeaders });
+    expect((await list.json()).debitMemos).toHaveLength(1);
+  });
+
   test("serves accounting credit, partial payment, aging, and FX endpoints", async () => {
     const create = await app.request("/v1/invoices", {
       method: "POST",

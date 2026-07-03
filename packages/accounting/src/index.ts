@@ -82,7 +82,7 @@ export interface LedgerEntry {
 export interface JournalEntry {
   id: string;
   tenantId: string;
-  source: "invoice_posting" | "payment_run" | "fx_realization";
+  source: "invoice_posting" | "payment_run" | "fx_realization" | "debit_memo";
   postingDate: string;
   currency: string;
   entries: LedgerEntry[];
@@ -579,6 +579,33 @@ export function buildRealizedFxJournal(input: {
     source: "fx_realization",
     postingDate: input.postingDate,
     currency: input.fx.functionalCurrency,
+    entries,
+    balanced: journalBalances(entries),
+  };
+}
+
+// Post a buyer-issued vendor debit memo: Dr AP (reduce the liability),
+// Cr purchase returns/allowances. Balanced two-line entry.
+export function buildDebitMemoJournal(input: {
+  tenantId: string;
+  debitMemoId: string;
+  amount: Money;
+  currency: string;
+  postingDate: string;
+  apAccount?: string;
+  returnsAccount?: string;
+}): JournalEntry {
+  const amount = roundMoney(input.amount);
+  const entries: LedgerEntry[] = [
+    { account: input.apAccount ?? "2100", debit: amount, credit: 0, memo: `Debit memo ${input.debitMemoId}` },
+    { account: input.returnsAccount ?? "5100", debit: 0, credit: amount, memo: `Debit memo ${input.debitMemoId}` },
+  ];
+  return {
+    id: crypto.randomUUID(),
+    tenantId: input.tenantId,
+    source: "debit_memo",
+    postingDate: input.postingDate,
+    currency: input.currency,
     entries,
     balanced: journalBalances(entries),
   };

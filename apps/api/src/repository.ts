@@ -6,8 +6,10 @@ import {
   type CreateGoodsReceiptInput,
   type CreateInvoiceInput,
   type CreatePurchaseOrderInput,
+  type CreateDebitMemoInput,
   type CreateVendorInput,
   type CreditMemoRecord,
+  type DebitMemoRecord,
   type GoodsReceiptRecord,
   type Invoice,
   type PartialPaymentRecord,
@@ -20,6 +22,7 @@ import type { AgentRepository } from "@atlas/agents";
 import {
   applyCreditMemos,
   buildApAging,
+  buildDebitMemoJournal,
   buildInvoicePostingJournal,
   buildRealizedFxJournal,
   calculateRealizedFx,
@@ -73,6 +76,8 @@ export interface InvoiceRepository extends AgentRepository {
   applyAvailableCredits(ctx: TenantContext, invoiceId: string): Promise<ReturnType<typeof applyCreditMemos>>;
   executePartialPayment(ctx: TenantContext, invoiceId: string, requestedAmount: number): Promise<PartialPaymentExecution>;
   listPartialPayments(ctx: TenantContext, invoiceId: string): Promise<PartialPaymentRecord[]>;
+  createDebitMemo(ctx: TenantContext, input: CreateDebitMemoInput): Promise<{ debitMemo: DebitMemoRecord; journal: JournalEntry }>;
+  listDebitMemos(ctx: TenantContext): Promise<DebitMemoRecord[]>;
 }
 
 export interface PartialPaymentExecution {
@@ -92,6 +97,7 @@ export class InMemoryInvoiceRepository implements InvoiceRepository {
   private readonly periods = new Map<string, AccountingPeriodRecord>();
   private readonly creditMemos = new Map<string, CreditMemoRecord>();
   private readonly partialPaymentRecords: PartialPaymentRecord[] = [];
+  private readonly debitMemos = new Map<string, DebitMemoRecord>();
 
   async createInvoice(ctx: TenantContext, input: CreateInvoiceInput) {
     const id = crypto.randomUUID();
@@ -295,6 +301,17 @@ export class InMemoryInvoiceRepository implements InvoiceRepository {
     };
     this.partialPaymentRecords.push(payment);
     return { plan, executed: true, outstanding: roundMoney(outstanding - plan.paymentAmount), paymentId: payment.id };
+  }
+
+  async createDebitMemo(ctx: TenantContext, input: CreateDebitMemoInput) {
+    const debitMemo: DebitMemoRecord = { id: crypto.randomUUID(), tenantId: ctx.tenantId, status: "issued", createdAt: now(), ...input };
+    this.debitMemos.set(debitMemo.id, debitMemo);
+    const journal = buildDebitMemoJournal({ tenantId: ctx.tenantId, debitMemoId: debitMemo.id, amount: debitMemo.amount, currency: debitMemo.currency, postingDate: now().slice(0, 10) });
+    return { debitMemo, journal };
+  }
+
+  async listDebitMemos(ctx: TenantContext) {
+    return [...this.debitMemos.values()].filter((memo) => memo.tenantId === ctx.tenantId);
   }
 
   async addEvent(_ctx: TenantContext, event: Omit<AgentEvent, "id" | "createdAt">) {
