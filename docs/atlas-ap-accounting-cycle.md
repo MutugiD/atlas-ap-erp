@@ -111,6 +111,10 @@ RLS coverage:
   payment, crediting a withholding-tax-payable account (`2150`) instead of cash and keeping the journal
   balanced. Covered by fast and live tests.
 
+- Realized FX journal posting: `POST /v1/accounting/fx-realizations` returns the gain/loss and posts a
+  balanced `fx_realization` GL journal (gain → credit `7200`, loss → debit `7201`, against clearing `2100`),
+  persisted when `DATABASE_URL` is set. Covered by fast and live tests.
+
 ## Pending
-- Add debit memos and multi-currency realized FX journal posting.
+- Add debit memos.
 - Add bank statement import format parsers.

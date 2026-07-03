@@ -21,6 +21,7 @@ import {
   applyCreditMemos,
   buildApAging,
   buildInvoicePostingJournal,
+  buildRealizedFxJournal,
   calculateRealizedFx,
   createPaymentRun,
   createPartialPaymentPlan,
@@ -53,7 +54,7 @@ export interface InvoiceRepository extends AgentRepository {
   applyCredits(ctx: TenantContext, invoiceId: string, creditMemos: CreditMemo[]): Promise<ReturnType<typeof applyCreditMemos>>;
   planPartialPayment(ctx: TenantContext, invoiceId: string, requestedAmount: number): Promise<ReturnType<typeof createPartialPaymentPlan>>;
   aging(ctx: TenantContext, asOfDate: string): Promise<ReturnType<typeof buildApAging>>;
-  realizeFx(ctx: TenantContext, input: { invoiceId: string; functionalCurrency: string; invoiceFxRate: number; paymentFxRate: number }): Promise<ReturnType<typeof calculateRealizedFx>>;
+  realizeFx(ctx: TenantContext, input: { invoiceId: string; functionalCurrency: string; invoiceFxRate: number; paymentFxRate: number }): Promise<ReturnType<typeof calculateRealizedFx> & { journal: JournalEntry }>;
   createVendor(ctx: TenantContext, input: CreateVendorInput): Promise<Vendor>;
   listVendors(ctx: TenantContext): Promise<Vendor[]>;
   getVendor(ctx: TenantContext, id: string): Promise<Vendor | undefined>;
@@ -362,13 +363,15 @@ export class InMemoryInvoiceRepository implements InvoiceRepository {
   async realizeFx(ctx: TenantContext, input: { invoiceId: string; functionalCurrency: string; invoiceFxRate: number; paymentFxRate: number }) {
     const invoice = await this.getInvoice(ctx, input.invoiceId);
     if (!invoice) throw new Error("Invoice not found");
-    return calculateRealizedFx({
+    const fx = calculateRealizedFx({
       invoiceId: invoice.id,
       invoiceAmount: invoice.total,
       functionalCurrency: input.functionalCurrency,
       invoiceFxRate: input.invoiceFxRate,
       paymentFxRate: input.paymentFxRate,
     });
+    const journal = buildRealizedFxJournal({ tenantId: ctx.tenantId, fx, postingDate: now().slice(0, 10) });
+    return { ...fx, journal };
   }
 }
 

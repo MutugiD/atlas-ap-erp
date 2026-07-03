@@ -82,7 +82,7 @@ export interface LedgerEntry {
 export interface JournalEntry {
   id: string;
   tenantId: string;
-  source: "invoice_posting" | "payment_run";
+  source: "invoice_posting" | "payment_run" | "fx_realization";
   postingDate: string;
   currency: string;
   entries: LedgerEntry[];
@@ -545,6 +545,42 @@ export function calculateRealizedFx(input: {
     paymentFunctionalAmount,
     realizedGainLoss,
     account: realizedGainLoss > 0 ? "realized_fx_gain" : realizedGainLoss < 0 ? "realized_fx_loss" : "none",
+  };
+}
+
+// Post a realized FX gain/loss as a balanced two-line journal against an AP/FX
+// clearing account. A zero result produces an entry with no lines (still balanced).
+export function buildRealizedFxJournal(input: {
+  tenantId: string;
+  fx: RealizedFxResult;
+  postingDate: string;
+  clearingAccount?: string;
+  gainAccount?: string;
+  lossAccount?: string;
+}): JournalEntry {
+  const clearing = input.clearingAccount ?? "2100";
+  const gain = roundMoney(input.fx.realizedGainLoss);
+  const entries: LedgerEntry[] = [];
+  if (gain > 0) {
+    entries.push(
+      { account: clearing, debit: gain, credit: 0, memo: `Realized FX gain for ${input.fx.invoiceId}`, invoiceId: input.fx.invoiceId },
+      { account: input.gainAccount ?? "7200", debit: 0, credit: gain, memo: `Realized FX gain for ${input.fx.invoiceId}`, invoiceId: input.fx.invoiceId },
+    );
+  } else if (gain < 0) {
+    const loss = roundMoney(-gain);
+    entries.push(
+      { account: input.lossAccount ?? "7201", debit: loss, credit: 0, memo: `Realized FX loss for ${input.fx.invoiceId}`, invoiceId: input.fx.invoiceId },
+      { account: clearing, debit: 0, credit: loss, memo: `Realized FX loss for ${input.fx.invoiceId}`, invoiceId: input.fx.invoiceId },
+    );
+  }
+  return {
+    id: crypto.randomUUID(),
+    tenantId: input.tenantId,
+    source: "fx_realization",
+    postingDate: input.postingDate,
+    currency: input.fx.functionalCurrency,
+    entries,
+    balanced: journalBalances(entries),
   };
 }
 

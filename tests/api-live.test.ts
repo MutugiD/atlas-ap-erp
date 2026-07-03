@@ -180,6 +180,22 @@ describeLive("Atlas AP live Postgres persistence", () => {
     await appPool.end();
   });
 
+  test("realized FX posts and persists a balanced fx_realization journal", async () => {
+    const appPool = await freshSchema();
+    const repo = new PostgresInvoiceRepository({ pool: appPool });
+
+    const { invoice } = await repo.createInvoice(ctxA, { invoiceNumber: "FX-L", total: 1000, currency: "EUR" });
+    const fx = await repo.realizeFx(ctxA, { invoiceId: invoice.id, functionalCurrency: "USD", invoiceFxRate: 1.2, paymentFxRate: 1.1 });
+    expect(fx.account).toBe("realized_fx_gain");
+    expect(fx.journal.balanced).toBe(true);
+
+    expect(await scalar(appPool, tenantA, "select count(*)::int from gl_journal_entries where source = 'fx_realization'")).toBe(1);
+    const gain = await scalar(appPool, tenantA, "select coalesce(sum(credit),0)::float from gl_journal_lines where account = '7200'");
+    expect(gain).toBe(100);
+
+    await appPool.end();
+  });
+
   test("posting transition persists a balanced invoice_posting journal", async () => {
     const appPool = await freshSchema();
     const repo = new PostgresInvoiceRepository({ pool: appPool });

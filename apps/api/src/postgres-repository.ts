@@ -20,6 +20,7 @@ import {
   applyCreditMemos,
   buildApAging,
   buildInvoicePostingJournal,
+  buildRealizedFxJournal,
   calculateRealizedFx,
   createPaymentRun,
   createPartialPaymentPlan,
@@ -501,14 +502,20 @@ export class PostgresInvoiceRepository implements InvoiceRepository {
   }
 
   async realizeFx(ctx: TenantContext, input: { invoiceId: string; functionalCurrency: string; invoiceFxRate: number; paymentFxRate: number }) {
-    const invoice = await this.getInvoice(ctx, input.invoiceId);
-    if (!invoice) throw new Error("Invoice not found");
-    return calculateRealizedFx({
-      invoiceId: invoice.id,
-      invoiceAmount: invoice.total,
-      functionalCurrency: input.functionalCurrency,
-      invoiceFxRate: input.invoiceFxRate,
-      paymentFxRate: input.paymentFxRate,
+    return this.tx(ctx.tenantId, async (client) => {
+      const invoiceResult = await client.query("select * from invoices where tenant_id = $1 and id = $2 limit 1", [ctx.tenantId, input.invoiceId]);
+      if (!invoiceResult.rowCount) throw new Error("Invoice not found");
+      const invoice = rowToInvoice(invoiceResult.rows[0]);
+      const fx = calculateRealizedFx({
+        invoiceId: invoice.id,
+        invoiceAmount: invoice.total,
+        functionalCurrency: input.functionalCurrency,
+        invoiceFxRate: input.invoiceFxRate,
+        paymentFxRate: input.paymentFxRate,
+      });
+      const journal = buildRealizedFxJournal({ tenantId: ctx.tenantId, fx, postingDate: new Date().toISOString().slice(0, 10) });
+      if (journal.entries.length > 0) await persistJournal(client, ctx.tenantId, journal);
+      return { ...fx, journal };
     });
   }
 }
