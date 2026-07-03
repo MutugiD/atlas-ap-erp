@@ -319,6 +319,10 @@ describe("Hono API", () => {
       headers,
       body: JSON.stringify({ invoiceId: invoice.id, functionalCurrency: "USD", invoiceFxRate: 1.2, paymentFxRate: 1.1 }),
     });
-    expect((await fx.json()).result.account).toBe("realized_fx_gain");
+    const fxResult = (await fx.json()).result;
+    expect(fxResult.account).toBe("realized_fx_gain");
+    expect(fxResult.journal.balanced).toBe(true);
+    expect(fxResult.journal.source).toBe("fx_realization");
+    expect(fxResult.journal.entries.some((e: { account: string; credit: number }) => e.account === "7200" && e.credit === 100)).toBe(true);
   });
 });

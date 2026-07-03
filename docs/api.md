@@ -78,7 +78,7 @@ writes no journal.
 | POST | `/v1/accounting/credit-memo-applications` | `{ invoiceId, creditMemos: [...] }` | Ad-hoc credit application calculation (non-persistent; see `/apply-credits` for the persisted flow). |
 | POST | `/v1/accounting/partial-payment-plans` | `{ invoiceId, requestedAmount }` | Partial-payment plan calculation. |
 | GET | `/v1/accounting/aging` | `?asOfDate=YYYY-MM-DD` | AP aging buckets. |
-| POST | `/v1/accounting/fx-realizations` | `{ invoiceId, functionalCurrency, invoiceFxRate, paymentFxRate }` | Realized FX gain/loss calculation. |
+| POST | `/v1/accounting/fx-realizations` | `{ invoiceId, functionalCurrency, invoiceFxRate, paymentFxRate }` | Realized FX gain/loss; also returns and (with `DATABASE_URL`) persists a balanced `fx_realization` GL journal. |
 
 Persistence is active when `DATABASE_URL` is set (Postgres, tenant-scoped RLS); otherwise the API runs on an
 in-memory repository for local/dev and the fast test suite.
