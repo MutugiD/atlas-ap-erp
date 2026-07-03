@@ -1,11 +1,16 @@
 import { type AgentEvent, type CreateInvoiceInput, type Invoice, type TenantContext } from "@atlas/contracts";
 import type { AgentRepository } from "@atlas/agents";
 import {
+  applyCreditMemos,
+  buildApAging,
   buildInvoicePostingJournal,
+  calculateRealizedFx,
   createPaymentRun,
+  createPartialPaymentPlan,
   reconcileBankTransactions,
   type AccountingInvoice,
   type BankTransaction,
+  type CreditMemo,
   type JournalEntry,
   type Payment,
   type PaymentRun,
@@ -24,6 +29,10 @@ export interface InvoiceRepository extends AgentRepository {
   previewPosting(ctx: TenantContext, invoiceId: string): Promise<JournalEntry>;
   createPaymentRun(ctx: TenantContext, scheduledDate: string): Promise<PaymentRun>;
   reconcilePayments(ctx: TenantContext, bankTransactions: BankTransaction[]): Promise<ReturnType<typeof reconcileBankTransactions>>;
+  applyCredits(ctx: TenantContext, invoiceId: string, creditMemos: CreditMemo[]): Promise<ReturnType<typeof applyCreditMemos>>;
+  planPartialPayment(ctx: TenantContext, invoiceId: string, requestedAmount: number): Promise<ReturnType<typeof createPartialPaymentPlan>>;
+  aging(ctx: TenantContext, asOfDate: string): Promise<ReturnType<typeof buildApAging>>;
+  realizeFx(ctx: TenantContext, input: { invoiceId: string; functionalCurrency: string; invoiceFxRate: number; paymentFxRate: number }): Promise<ReturnType<typeof calculateRealizedFx>>;
 }
 
 export class InMemoryInvoiceRepository implements InvoiceRepository {
@@ -132,6 +141,34 @@ export class InMemoryInvoiceRepository implements InvoiceRepository {
 
   async reconcilePayments(ctx: TenantContext, bankTransactions: BankTransaction[]) {
     return reconcileBankTransactions({ payments: this.payments.get(ctx.tenantId) ?? [], bankTransactions });
+  }
+
+  async applyCredits(ctx: TenantContext, invoiceId: string, creditMemos: CreditMemo[]) {
+    const invoice = await this.getInvoice(ctx, invoiceId);
+    if (!invoice) throw new Error("Invoice not found");
+    return applyCreditMemos({ invoice: toAccountingInvoice(invoice), creditMemos });
+  }
+
+  async planPartialPayment(ctx: TenantContext, invoiceId: string, requestedAmount: number) {
+    const invoice = await this.getInvoice(ctx, invoiceId);
+    if (!invoice) throw new Error("Invoice not found");
+    return createPartialPaymentPlan({ invoice: toAccountingInvoice(invoice), requestedAmount });
+  }
+
+  async aging(ctx: TenantContext, asOfDate: string) {
+    return buildApAging({ invoices: (await this.listInvoices(ctx)).map(toAccountingInvoice), asOfDate });
+  }
+
+  async realizeFx(ctx: TenantContext, input: { invoiceId: string; functionalCurrency: string; invoiceFxRate: number; paymentFxRate: number }) {
+    const invoice = await this.getInvoice(ctx, input.invoiceId);
+    if (!invoice) throw new Error("Invoice not found");
+    return calculateRealizedFx({
+      invoiceId: invoice.id,
+      invoiceAmount: invoice.total,
+      functionalCurrency: input.functionalCurrency,
+      invoiceFxRate: input.invoiceFxRate,
+      paymentFxRate: input.paymentFxRate,
+    });
   }
 }
 

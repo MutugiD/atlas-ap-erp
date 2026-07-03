@@ -62,6 +62,25 @@ v1.post("/reconciliations", async (c) => {
   return c.json({ reconciliation: await repository.reconcilePayments(c.get("tenant"), body.bankTransactions ?? []) });
 });
 
+v1.post("/accounting/credit-memo-applications", async (c) => {
+  const body = await c.req.json();
+  return c.json({ result: await repository.applyCredits(c.get("tenant"), body.invoiceId, body.creditMemos ?? []) });
+});
+
+v1.post("/accounting/partial-payment-plans", async (c) => {
+  const body = await c.req.json();
+  return c.json({ result: await repository.planPartialPayment(c.get("tenant"), body.invoiceId, Number(body.requestedAmount ?? 0)) });
+});
+
+v1.get("/accounting/aging", async (c) => {
+  return c.json({ buckets: await repository.aging(c.get("tenant"), c.req.query("asOfDate") ?? new Date().toISOString().slice(0, 10)) });
+});
+
+v1.post("/accounting/fx-realizations", async (c) => {
+  const body = await c.req.json();
+  return c.json({ result: await repository.realizeFx(c.get("tenant"), body) });
+});
+
 v1.post("/webhooks/email-inbound", async (c) => {
   const tenant = c.get("tenant");
   const body = await c.req.json();

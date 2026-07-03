@@ -93,4 +93,41 @@ describe("Hono API", () => {
     });
     expect((await reconciliation.json()).reconciliation.matched).toHaveLength(1);
   });
+
+  test("serves accounting credit, partial payment, aging, and FX endpoints", async () => {
+    const create = await app.request("/v1/invoices", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ vendorName: "Global Components Ltd", invoiceNumber: "FX-1", total: 1000, currency: "EUR" }),
+    });
+    const invoice = (await create.json()).invoice;
+    await app.request(`/v1/invoices/${invoice.id}/reprocess`, { method: "POST", headers });
+
+    const credits = await app.request("/v1/accounting/credit-memo-applications", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        invoiceId: invoice.id,
+        creditMemos: [{ id: "cm-api-1", vendorId: "vendor:Global Components Ltd", amount: 300, currency: "EUR", status: "available" }],
+      }),
+    });
+    expect((await credits.json()).result.netPayable).toBe(700);
+
+    const partial = await app.request("/v1/accounting/partial-payment-plans", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ invoiceId: invoice.id, requestedAmount: 250 }),
+    });
+    expect((await partial.json()).result.remainingAmount).toBe(750);
+
+    const aging = await app.request("/v1/accounting/aging?asOfDate=2026-08-20", { headers });
+    expect((await aging.json()).buckets.some((bucket: { amount: number }) => bucket.amount > 0)).toBe(true);
+
+    const fx = await app.request("/v1/accounting/fx-realizations", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ invoiceId: invoice.id, functionalCurrency: "USD", invoiceFxRate: 1.2, paymentFxRate: 1.1 }),
+    });
+    expect((await fx.json()).result.account).toBe("realized_fx_gain");
+  });
 });

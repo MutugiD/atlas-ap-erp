@@ -33,6 +33,10 @@ Implemented controls:
 - `POST /v1/invoices/:id/posting-preview`
 - `POST /v1/payment-runs`
 - `POST /v1/reconciliations`
+- `POST /v1/accounting/credit-memo-applications`
+- `POST /v1/accounting/partial-payment-plans`
+- `GET /v1/accounting/aging`
+- `POST /v1/accounting/fx-realizations`
 
 ## Persistence Shape Added
 
