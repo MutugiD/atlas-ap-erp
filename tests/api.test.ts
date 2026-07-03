@@ -247,6 +247,28 @@ describe("Hono API", () => {
     expect(b.amount).toBe(100);
   });
 
+  test("executes partial payments and tracks the outstanding balance", async () => {
+    const pHeaders = { ...headers, "x-tenant-id": "aaaaaaaa-aaaa-4aaa-8aaa-000000000002" };
+    const invoice = (await (await app.request("/v1/invoices", {
+      method: "POST",
+      headers: pHeaders,
+      body: JSON.stringify({ vendorName: "PP Vendor", invoiceNumber: "PP-1", total: 1000, currency: "USD" }),
+    })).json()).invoice;
+    await app.request(`/v1/invoices/${invoice.id}/reprocess`, { method: "POST", headers: pHeaders });
+
+    const first = (await (await app.request(`/v1/invoices/${invoice.id}/partial-payments`, { method: "POST", headers: pHeaders, body: JSON.stringify({ requestedAmount: 400 }) })).json()).result;
+    expect(first.executed).toBe(true);
+    expect(first.plan.paymentAmount).toBe(400);
+    expect(first.outstanding).toBe(600);
+
+    const second = (await (await app.request(`/v1/invoices/${invoice.id}/partial-payments`, { method: "POST", headers: pHeaders, body: JSON.stringify({ requestedAmount: 700 }) })).json()).result;
+    expect(second.plan.paymentAmount).toBe(600); // capped at the remaining outstanding
+    expect(second.outstanding).toBe(0);
+
+    const list = (await (await app.request(`/v1/invoices/${invoice.id}/partial-payments`, { headers: pHeaders })).json()).partialPayments;
+    expect(list).toHaveLength(2);
+  });
+
   test("serves accounting credit, partial payment, aging, and FX endpoints", async () => {
     const create = await app.request("/v1/invoices", {
       method: "POST",

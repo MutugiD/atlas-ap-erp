@@ -10,6 +10,7 @@ import {
   type CreditMemoRecord,
   type GoodsReceiptRecord,
   type Invoice,
+  type PartialPaymentRecord,
   type PurchaseOrder,
   type TenantContext,
   type UpdateVendorInput,
@@ -31,7 +32,7 @@ import {
   type Payment,
 } from "@atlas/accounting";
 import { Pool, type PoolClient } from "pg";
-import type { InvoiceRepository } from "./repository";
+import type { InvoiceRepository, PartialPaymentExecution } from "./repository";
 import { ClosedPeriodError } from "./errors";
 import { toAccountingCreditMemo, toAccountingInvoice, toGoodsReceipt, toPurchaseOrderAccounting, toVendorMaster, vendorMastersForInvoices } from "./mappers";
 
@@ -434,6 +435,32 @@ export class PostgresInvoiceRepository implements InvoiceRepository {
     });
   }
 
+  async listPartialPayments(ctx: TenantContext, invoiceId: string) {
+    return this.tx(ctx.tenantId, async (client) => {
+      const result = await client.query("select * from partial_payments where tenant_id = $1 and invoice_id = $2 order by created_at asc", [ctx.tenantId, invoiceId]);
+      return result.rows.map(rowToPartialPayment);
+    });
+  }
+
+  async executePartialPayment(ctx: TenantContext, invoiceId: string, requestedAmount: number): Promise<PartialPaymentExecution> {
+    return this.tx(ctx.tenantId, async (client) => {
+      const invoiceResult = await client.query("select * from invoices where tenant_id = $1 and id = $2 limit 1", [ctx.tenantId, invoiceId]);
+      if (!invoiceResult.rowCount) throw new Error("Invoice not found");
+      const invoice = rowToInvoice(invoiceResult.rows[0]);
+      const paidResult = await client.query("select coalesce(sum(amount),0)::float as paid from partial_payments where tenant_id = $1 and invoice_id = $2", [ctx.tenantId, invoiceId]);
+      const outstanding = Math.round((invoice.total - Number(paidResult.rows[0].paid)) * 100) / 100;
+      const plan = createPartialPaymentPlan({ invoice: { ...toAccountingInvoice(invoice), total: outstanding }, requestedAmount });
+      if (plan.findings.some((finding) => finding.severity === "error")) {
+        return { plan, executed: false, outstanding };
+      }
+      const inserted = await client.query(
+        "insert into partial_payments (tenant_id, invoice_id, amount, currency, status) values ($1,$2,$3,$4,'paid') returning id",
+        [ctx.tenantId, invoiceId, String(plan.paymentAmount), invoice.currency],
+      );
+      return { plan, executed: true, outstanding: Math.round((outstanding - plan.paymentAmount) * 100) / 100, paymentId: String(inserted.rows[0].id) };
+    });
+  }
+
   async reconcilePayments(ctx: TenantContext, bankTransactions: BankTransaction[]) {
     return this.tx(ctx.tenantId, async (client) => {
       const paymentsResult = await client.query("select * from payments where tenant_id = $1", [ctx.tenantId]);
@@ -570,6 +597,18 @@ function toDateString(value: unknown): string {
     return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
   }
   return String(value);
+}
+
+function rowToPartialPayment(row: Record<string, unknown>): PartialPaymentRecord {
+  return {
+    id: String(row.id),
+    tenantId: String(row.tenant_id),
+    invoiceId: String(row.invoice_id),
+    amount: Number(row.amount),
+    currency: String(row.currency),
+    status: String(row.status),
+    createdAt: new Date(row.created_at as string).toISOString(),
+  };
 }
 
 function rowToCreditMemo(row: Record<string, unknown>): CreditMemoRecord {

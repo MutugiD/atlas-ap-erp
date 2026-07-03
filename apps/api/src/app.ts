@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { createAccountingPeriodSchema, createCreditMemoSchema, createGoodsReceiptSchema, createInvoiceSchema, createPurchaseOrderSchema, createVendorSchema, updateVendorSchema } from "@atlas/contracts";
+import { createAccountingPeriodSchema, createCreditMemoSchema, createGoodsReceiptSchema, createInvoiceSchema, createPurchaseOrderSchema, createVendorSchema, executePartialPaymentSchema, updateVendorSchema } from "@atlas/contracts";
 import { Supervisor } from "@atlas/agents";
 import { repository } from "./repository";
 import { ClosedPeriodError } from "./errors";
@@ -148,6 +148,15 @@ v1.get("/credit-memos", async (c) => c.json({ creditMemos: await repository.list
 
 v1.post("/invoices/:id/apply-credits", async (c) => {
   return c.json({ result: await repository.applyAvailableCredits(c.get("tenant"), c.req.param("id")) });
+});
+
+v1.post("/invoices/:id/partial-payments", async (c) => {
+  const input = executePartialPaymentSchema.parse(await c.req.json());
+  return c.json({ result: await repository.executePartialPayment(c.get("tenant"), c.req.param("id"), input.requestedAmount) });
+});
+
+v1.get("/invoices/:id/partial-payments", async (c) => {
+  return c.json({ partialPayments: await repository.listPartialPayments(c.get("tenant"), c.req.param("id")) });
 });
 
 v1.post("/webhooks/email-inbound", async (c) => {
