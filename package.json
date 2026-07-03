@@ -57,7 +57,7 @@
     "@types/react-dom": "^19.0.2",
     "aws-cdk": "^2.171.1",
     "drizzle-kit": "^0.31.10",
-    "eslint": "^9",
+    "eslint": "^10",
     "globals": "^17.7.0",
     "typescript": "^5.7.2",
     "typescript-eslint": "^8.62.1"
