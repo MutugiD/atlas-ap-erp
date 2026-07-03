@@ -8,5 +8,12 @@ describe("infra", () => {
       expect(source).toContain(token);
     }
   });
+
+  test("CDK stack is hardened for deploy (service, redis, encryption, outputs)", () => {
+    const source = readFileSync("infra/lib/atlas-ap-stack.ts", "utf8");
+    for (const token of ["ApplicationLoadBalancedFargateService", "CfnCacheCluster", "storageEncrypted", "deletionProtection", "CfnOutput", "/health/ready"]) {
+      expect(source).toContain(token);
+    }
+  });
 });
 
