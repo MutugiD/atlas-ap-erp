@@ -3,7 +3,10 @@ import { createAccountingPeriodSchema, createCreditMemoSchema, createDebitMemoSc
 import { Supervisor } from "@atlas/agents";
 import { repository } from "./repository";
 import { ClosedPeriodError } from "./errors";
+import { BankNotConfiguredError, createBankConnector } from "./bank";
 import { withTenant } from "./tenant";
+
+const bankConnector = createBankConnector();
 
 export const app = new Hono();
 const supervisor = new Supervisor();
@@ -61,6 +64,26 @@ v1.post("/payment-runs", async (c) => {
 v1.post("/reconciliations", async (c) => {
   const body = await c.req.json();
   return c.json({ reconciliation: await repository.reconcilePayments(c.get("tenant"), body.bankTransactions ?? []) });
+});
+
+// Pull a bank statement via the configured connector (e.g. Equity Jenga) and
+// reconcile it against persisted payments in one call.
+v1.post("/bank/statement-reconcile", async (c) => {
+  const body = await c.req.json();
+  try {
+    const transactions = await bankConnector.fetchStatement({
+      accountNumber: body.accountNumber,
+      countryCode: body.countryCode ?? "KE",
+      fromDate: body.fromDate,
+      toDate: body.toDate,
+      limit: body.limit,
+    });
+    const reconciliation = await repository.reconcilePayments(c.get("tenant"), transactions);
+    return c.json({ provider: bankConnector.provider, transactions: transactions.length, reconciliation });
+  } catch (error) {
+    if (error instanceof BankNotConfiguredError) return c.json({ error: "bank_not_configured", message: error.message }, 501);
+    throw error;
+  }
 });
 
 v1.post("/accounting/credit-memo-applications", async (c) => {

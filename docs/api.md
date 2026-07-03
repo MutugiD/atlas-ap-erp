@@ -81,7 +81,8 @@ writes no journal.
 | Method | Path | Body / query | Purpose |
 |---|---|---|---|
 | POST | `/v1/payment-runs` | `{ scheduledDate? }` | Create a payment run over payable invoices (honors vendor hold). |
-| POST | `/v1/reconciliations` | `{ bankTransactions: [...] }` | Reconcile persisted payments against bank transactions. |
+| POST | `/v1/reconciliations` | `{ bankTransactions: [...] }` | Reconcile persisted payments against bank transactions you supply. |
+| POST | `/v1/bank/statement-reconcile` | `{ accountNumber, countryCode?, fromDate, toDate, limit? }` | Pull a statement via the configured bank connector (e.g. Equity Jenga) and reconcile it against persisted payments. `501 bank_not_configured` when `BANK_PROVIDER` is unset. See `docs/bank-integration.md`. |
 | POST | `/v1/accounting/credit-memo-applications` | `{ invoiceId, creditMemos: [...] }` | Ad-hoc credit application calculation (non-persistent; see `/apply-credits` for the persisted flow). |
 | POST | `/v1/accounting/partial-payment-plans` | `{ invoiceId, requestedAmount }` | Partial-payment plan calculation. |
 | GET | `/v1/accounting/aging` | `?asOfDate=YYYY-MM-DD` | AP aging buckets. |
