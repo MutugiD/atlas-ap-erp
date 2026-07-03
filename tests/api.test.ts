@@ -142,6 +142,60 @@ describe("Hono API", () => {
     expect(run.excluded.some((e: { invoiceId: string; reason: string }) => e.invoiceId === invoice.id && e.reason === "Vendor payment hold")).toBe(true);
   });
 
+  async function createVendorFor(h: Record<string, string>, name: string) {
+    return (await (await app.request("/v1/vendors", { method: "POST", headers: h, body: JSON.stringify({ name, currency: "USD" }) })).json()).vendor;
+  }
+
+  test("purchase order and goods receipt drive a clean three-way match", async () => {
+    const eHeaders = { ...headers, "x-tenant-id": "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee" };
+    const vendor = await createVendorFor(eHeaders, "Widgets Co");
+    const po = (await (await app.request("/v1/purchase-orders", {
+      method: "POST",
+      headers: eHeaders,
+      body: JSON.stringify({ poNumber: "PO-1", vendorId: vendor.id, currency: "USD", lines: [{ description: "Widgets", quantity: 1, unitPrice: 1000, total: 1000 }] }),
+    })).json()).purchaseOrder;
+    expect(po.total).toBe(1000);
+    expect(po.status).toBe("open");
+
+    const receipt = await app.request("/v1/goods-receipts", {
+      method: "POST",
+      headers: eHeaders,
+      body: JSON.stringify({ poId: po.id, description: "Widgets", quantityReceived: 1 }),
+    });
+    expect(receipt.status).toBe(201);
+
+    const invoice = (await (await app.request("/v1/invoices", {
+      method: "POST",
+      headers: eHeaders,
+      body: JSON.stringify({ vendorName: "Widgets", vendorId: vendor.id, invoiceNumber: "PO-INV-1", total: 1000, currency: "USD", poId: po.id }),
+    })).json()).invoice;
+
+    const match = (await (await app.request(`/v1/invoices/${invoice.id}/three-way-match`, { method: "POST", headers: eHeaders })).json()).match;
+    expect(match.ok).toBe(true);
+    expect(match.amountVariance).toBe(0);
+
+    const receipts = await app.request(`/v1/purchase-orders/${po.id}/goods-receipts`, { headers: eHeaders });
+    expect((await receipts.json()).goodsReceipts).toHaveLength(1);
+  });
+
+  test("three-way match flags a purchase order amount variance", async () => {
+    const fHeaders = { ...headers, "x-tenant-id": "ffffffff-ffff-4fff-8fff-ffffffffffff" };
+    const vendor = await createVendorFor(fHeaders, "Parts Co");
+    const po = (await (await app.request("/v1/purchase-orders", {
+      method: "POST",
+      headers: fHeaders,
+      body: JSON.stringify({ poNumber: "PO-2", vendorId: vendor.id, currency: "USD", lines: [{ description: "Parts", quantity: 1, unitPrice: 1000, total: 1000 }] }),
+    })).json()).purchaseOrder;
+    const invoice = (await (await app.request("/v1/invoices", {
+      method: "POST",
+      headers: fHeaders,
+      body: JSON.stringify({ vendorName: "Parts", vendorId: vendor.id, invoiceNumber: "PO-INV-2", total: 2000, currency: "USD", poId: po.id }),
+    })).json()).invoice;
+    const match = (await (await app.request(`/v1/invoices/${invoice.id}/three-way-match`, { method: "POST", headers: fHeaders })).json()).match;
+    expect(match.ok).toBe(false);
+    expect(match.findings.some((f: { code: string }) => f.code === "po_amount_variance")).toBe(true);
+  });
+
   test("serves accounting credit, partial payment, aging, and FX endpoints", async () => {
     const create = await app.request("/v1/invoices", {
       method: "POST",

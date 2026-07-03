@@ -1,8 +1,12 @@
 import {
   type AgentEvent,
+  type CreateGoodsReceiptInput,
   type CreateInvoiceInput,
+  type CreatePurchaseOrderInput,
   type CreateVendorInput,
+  type GoodsReceiptRecord,
   type Invoice,
+  type PurchaseOrder,
   type TenantContext,
   type UpdateVendorInput,
   type Vendor,
@@ -16,13 +20,15 @@ import {
   createPaymentRun,
   createPartialPaymentPlan,
   reconcileBankTransactions,
+  roundMoney,
+  threeWayMatch as runThreeWayMatch,
   type BankTransaction,
   type CreditMemo,
   type JournalEntry,
   type Payment,
   type PaymentRun,
 } from "@atlas/accounting";
-import { toAccountingInvoice, toVendorMaster, vendorMastersForInvoices } from "./mappers";
+import { toAccountingInvoice, toGoodsReceipt, toPurchaseOrderAccounting, toVendorMaster, vendorMastersForInvoices } from "./mappers";
 import { PostgresInvoiceRepository } from "./postgres-repository";
 
 const now = () => new Date().toISOString();
@@ -46,6 +52,12 @@ export interface InvoiceRepository extends AgentRepository {
   listVendors(ctx: TenantContext): Promise<Vendor[]>;
   getVendor(ctx: TenantContext, id: string): Promise<Vendor | undefined>;
   updateVendor(ctx: TenantContext, id: string, patch: UpdateVendorInput): Promise<Vendor>;
+  createPurchaseOrder(ctx: TenantContext, input: CreatePurchaseOrderInput): Promise<PurchaseOrder>;
+  listPurchaseOrders(ctx: TenantContext): Promise<PurchaseOrder[]>;
+  getPurchaseOrder(ctx: TenantContext, id: string): Promise<PurchaseOrder | undefined>;
+  createGoodsReceipt(ctx: TenantContext, input: CreateGoodsReceiptInput): Promise<GoodsReceiptRecord>;
+  listGoodsReceipts(ctx: TenantContext, poId: string): Promise<GoodsReceiptRecord[]>;
+  matchInvoice(ctx: TenantContext, invoiceId: string): Promise<ReturnType<typeof runThreeWayMatch>>;
 }
 
 export class InMemoryInvoiceRepository implements InvoiceRepository {
@@ -53,6 +65,8 @@ export class InMemoryInvoiceRepository implements InvoiceRepository {
   private readonly events: AgentEvent[] = [];
   private readonly payments = new Map<string, Payment[]>();
   private readonly vendors = new Map<string, Vendor>();
+  private readonly purchaseOrders = new Map<string, PurchaseOrder>();
+  private readonly goodsReceipts: GoodsReceiptRecord[] = [];
 
   async createInvoice(ctx: TenantContext, input: CreateInvoiceInput) {
     const id = crypto.randomUUID();
@@ -97,6 +111,55 @@ export class InMemoryInvoiceRepository implements InvoiceRepository {
     const updated: Vendor = { ...vendor, ...patch };
     this.vendors.set(id, updated);
     return updated;
+  }
+
+  async createPurchaseOrder(ctx: TenantContext, input: CreatePurchaseOrderInput) {
+    const po: PurchaseOrder = {
+      id: crypto.randomUUID(),
+      tenantId: ctx.tenantId,
+      poNumber: input.poNumber,
+      vendorId: input.vendorId,
+      currency: input.currency,
+      total: roundMoney(input.lines.reduce((sum, line) => sum + line.total, 0)),
+      status: "open",
+      lines: input.lines,
+      createdAt: now(),
+    };
+    this.purchaseOrders.set(po.id, po);
+    return po;
+  }
+
+  async listPurchaseOrders(ctx: TenantContext) {
+    return [...this.purchaseOrders.values()].filter((po) => po.tenantId === ctx.tenantId);
+  }
+
+  async getPurchaseOrder(ctx: TenantContext, id: string) {
+    const po = this.purchaseOrders.get(id);
+    return po?.tenantId === ctx.tenantId ? po : undefined;
+  }
+
+  async createGoodsReceipt(ctx: TenantContext, input: CreateGoodsReceiptInput) {
+    const po = await this.getPurchaseOrder(ctx, input.poId);
+    if (!po) throw new Error("Purchase order not found");
+    const receipt: GoodsReceiptRecord = { id: crypto.randomUUID(), tenantId: ctx.tenantId, createdAt: now(), ...input };
+    this.goodsReceipts.push(receipt);
+    return receipt;
+  }
+
+  async listGoodsReceipts(ctx: TenantContext, poId: string) {
+    return this.goodsReceipts.filter((receipt) => receipt.tenantId === ctx.tenantId && receipt.poId === poId);
+  }
+
+  async matchInvoice(ctx: TenantContext, invoiceId: string) {
+    const invoice = await this.getInvoice(ctx, invoiceId);
+    if (!invoice) throw new Error("Invoice not found");
+    const po = invoice.poId ? await this.getPurchaseOrder(ctx, invoice.poId) : undefined;
+    const receipts = po ? await this.listGoodsReceipts(ctx, po.id) : [];
+    return runThreeWayMatch({
+      invoice: toAccountingInvoice(invoice),
+      po: po ? toPurchaseOrderAccounting(po) : undefined,
+      receipts: receipts.map(toGoodsReceipt),
+    });
   }
 
   async listInvoices(ctx: TenantContext) {

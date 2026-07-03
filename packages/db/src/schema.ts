@@ -58,8 +58,24 @@ export const purchaseOrders = pgTable(
     vendorId: uuid("vendor_id").references(() => vendors.id),
     total: numeric("total", { precision: 14, scale: 2 }).notNull(),
     currency: text("currency").notNull().default("USD"),
+    lines: jsonb("lines").notNull().default([]),
+    status: text("status").notNull().default("open"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("purchase_orders_tenant_idx").on(t.tenantId), tenantPolicy(t)],
+).enableRLS();
+
+export const goodsReceipts = pgTable(
+  "goods_receipts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    poId: uuid("po_id").notNull().references(() => purchaseOrders.id),
+    description: text("description").notNull(),
+    quantityReceived: numeric("quantity_received", { precision: 14, scale: 2 }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("goods_receipts_tenant_po_idx").on(t.tenantId, t.poId), tenantPolicy(t)],
 ).enableRLS();
 
 export const invoices = pgTable(
