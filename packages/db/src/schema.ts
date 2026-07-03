@@ -45,6 +45,7 @@ export const vendors = pgTable(
     paymentTermsDays: integer("payment_terms_days").notNull().default(30),
     defaultExpenseAccount: text("default_expense_account").notNull().default("6100"),
     currency: text("currency").notNull().default("USD"),
+    withholdingTaxRate: numeric("withholding_tax_rate", { precision: 6, scale: 4 }).notNull().default("0"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("vendors_tenant_idx").on(t.tenantId), tenantPolicy(t)],

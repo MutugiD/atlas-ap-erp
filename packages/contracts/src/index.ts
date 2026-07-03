@@ -158,6 +158,7 @@ export const vendorSchema = z.object({
   paymentTermsDays: z.number().int().nonnegative(),
   defaultExpenseAccount: z.string(),
   currency: z.string().length(3),
+  withholdingTaxRate: z.number().min(0).max(1),
   createdAt: z.string(),
 });
 export type Vendor = z.infer<typeof vendorSchema>;
@@ -170,6 +171,7 @@ export const createVendorSchema = z.object({
   paymentTermsDays: z.number().int().nonnegative().default(30),
   defaultExpenseAccount: z.string().default("6100"),
   currency: z.string().length(3).default("USD"),
+  withholdingTaxRate: z.number().min(0).max(1).default(0),
 });
 export type CreateVendorInput = z.infer<typeof createVendorSchema>;
 

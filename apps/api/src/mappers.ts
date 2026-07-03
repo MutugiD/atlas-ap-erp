@@ -55,6 +55,7 @@ export function vendorToMaster(vendor: Vendor): VendorMaster {
     defaultExpenseAccount: vendor.defaultExpenseAccount,
     currency: vendor.currency,
     holdPayments: vendor.holdPayments,
+    withholdingTaxRate: vendor.withholdingTaxRate,
   };
 }
 

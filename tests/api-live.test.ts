@@ -55,7 +55,7 @@ describeLive("Atlas AP live Postgres persistence", () => {
     const appPool = await freshSchema();
     const repo = new PostgresInvoiceRepository({ pool: appPool });
 
-    const heldVendor = await repo.createVendor(ctxA, { name: "Held", currency: "USD", active: true, holdPayments: true, paymentTermsDays: 30, defaultExpenseAccount: "6100" });
+    const heldVendor = await repo.createVendor(ctxA, { name: "Held", currency: "USD", active: true, holdPayments: true, paymentTermsDays: 30, defaultExpenseAccount: "6100", withholdingTaxRate: 0 });
 
     // Vendor master is tenant-scoped: B cannot see A's vendor.
     expect(await repo.getVendor(ctxB, heldVendor.id)).toBeUndefined();
@@ -76,7 +76,7 @@ describeLive("Atlas AP live Postgres persistence", () => {
     const appPool = await freshSchema();
     const repo = new PostgresInvoiceRepository({ pool: appPool });
 
-    const vendor = await repo.createVendor(ctxA, { name: "Widgets Co", currency: "USD", active: true, holdPayments: false, paymentTermsDays: 30, defaultExpenseAccount: "6100" });
+    const vendor = await repo.createVendor(ctxA, { name: "Widgets Co", currency: "USD", active: true, holdPayments: false, paymentTermsDays: 30, defaultExpenseAccount: "6100", withholdingTaxRate: 0 });
     const po = await repo.createPurchaseOrder(ctxA, { poNumber: "PO-L1", vendorId: vendor.id, currency: "USD", lines: [{ description: "Widgets", quantity: 1, unitPrice: 1000, total: 1000 }] });
     expect(po.total).toBe(1000);
 
@@ -121,7 +121,7 @@ describeLive("Atlas AP live Postgres persistence", () => {
     const appPool = await freshSchema();
     const repo = new PostgresInvoiceRepository({ pool: appPool });
 
-    const vendor = await repo.createVendor(ctxA, { name: "Credit Vendor", currency: "USD", active: true, holdPayments: false, paymentTermsDays: 30, defaultExpenseAccount: "6100" });
+    const vendor = await repo.createVendor(ctxA, { name: "Credit Vendor", currency: "USD", active: true, holdPayments: false, paymentTermsDays: 30, defaultExpenseAccount: "6100", withholdingTaxRate: 0 });
     const { invoice } = await repo.createInvoice(ctxA, { vendorId: vendor.id, invoiceNumber: "CM-L", total: 1000, currency: "USD" });
     const memoA = await repo.createCreditMemo(ctxA, { vendorId: vendor.id, amount: 300, currency: "USD" });
     const memoB = await repo.createCreditMemo(ctxA, { vendorId: vendor.id, amount: 800, currency: "USD" });
@@ -161,6 +161,25 @@ describeLive("Atlas AP live Postgres persistence", () => {
     await appPool.end();
   });
 
+  test("payment run persists withholding-tax lines for a WHT vendor", async () => {
+    const appPool = await freshSchema();
+    const repo = new PostgresInvoiceRepository({ pool: appPool });
+
+    const vendor = await repo.createVendor(ctxA, { name: "WHT", currency: "USD", active: true, holdPayments: false, paymentTermsDays: 30, defaultExpenseAccount: "6100", withholdingTaxRate: 0.1 });
+    const { invoice } = await repo.createInvoice(ctxA, { vendorId: vendor.id, invoiceNumber: "WHT-L", total: 1000, currency: "USD" });
+    await repo.updateInvoice(ctxA, { ...invoice, status: "queued_for_payment" });
+
+    const run = await repo.createPaymentRun(ctxA, "2099-12-31");
+    expect(run.payments[0]?.withheldTax).toBe(100);
+
+    const whtCredit = await scalar(appPool, tenantA, "select coalesce(sum(credit),0)::float from gl_journal_lines where account = '2150'");
+    expect(whtCredit).toBe(100);
+    const cashCredit = await scalar(appPool, tenantA, "select coalesce(sum(credit),0)::float from gl_journal_lines where account = '1000'");
+    expect(cashCredit).toBe(900);
+
+    await appPool.end();
+  });
+
   test("posting transition persists a balanced invoice_posting journal", async () => {
     const appPool = await freshSchema();
     const repo = new PostgresInvoiceRepository({ pool: appPool });
@@ -196,6 +215,7 @@ async function freshSchema(): Promise<Pool> {
     "0004_accounting_periods",
     "0005_credit_memos",
     "0006_partial_payments",
+    "0007_vendor_withholding_tax",
   ]) {
     await owner.query(readFileSync(`packages/db/migrations/${m}.sql`, "utf8"));
   }

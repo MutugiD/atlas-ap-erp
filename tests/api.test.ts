@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { app } from "../apps/api/src/app";
+import { repository } from "../apps/api/src/repository";
 
 const headers = {
   "content-type": "application/json",
@@ -267,6 +268,21 @@ describe("Hono API", () => {
 
     const list = (await (await app.request(`/v1/invoices/${invoice.id}/partial-payments`, { headers: pHeaders })).json()).partialPayments;
     expect(list).toHaveLength(2);
+  });
+
+  test("payment run withholds tax for a vendor with a withholding rate", async () => {
+    const ctx = { tenantId: "aaaaaaaa-aaaa-4aaa-8aaa-000000000003", userId: "22222222-2222-4222-8222-222222222222", role: "ap_clerk" as const };
+    const vendor = await repository.createVendor(ctx, { name: "WHT Vendor", currency: "USD", active: true, holdPayments: false, paymentTermsDays: 30, defaultExpenseAccount: "6100", withholdingTaxRate: 0.1 });
+    expect(vendor.withholdingTaxRate).toBe(0.1);
+    const { invoice } = await repository.createInvoice(ctx, { vendorId: vendor.id, invoiceNumber: "WHT-1", total: 1000, currency: "USD" });
+    await repository.updateInvoice(ctx, { ...invoice, status: "queued_for_payment" });
+
+    const run = await repository.createPaymentRun(ctx, "2099-12-31");
+    const payment = run.payments.find((p) => p.invoiceId === invoice.id);
+    expect(payment?.withheldTax).toBe(100);
+    expect(run.journal.balanced).toBe(true);
+    expect(run.journal.entries.some((e) => e.account === "2150" && e.credit === 100)).toBe(true);
+    expect(run.journal.entries.some((e) => e.account === "1000" && e.credit === 900)).toBe(true);
   });
 
   test("serves accounting credit, partial payment, aging, and FX endpoints", async () => {
