@@ -41,8 +41,10 @@ export class OllamaAgentProvider implements AgentProvider {
   async extract(invoice: Invoice): Promise<InvoiceDraft> {
     try {
       const content = await this.chat(EXTRACT_SYSTEM_PROMPT, extractUserPrompt(invoice));
-      const raw = JSON.parse(content) as Record<string, unknown>;
-      return invoiceDraftSchema.parse({ ...draftDefaults(invoice), ...raw });
+      const raw = extractJsonObject(content);
+      // Overlay only the fields the model actually filled so nulls/empties don't
+      // clobber the schema-valid defaults (small models often return e.g. lines: []).
+      return invoiceDraftSchema.parse(mergeDraft(draftDefaults(invoice), raw));
     } catch {
       // Any transport/parse/validation failure falls back to deterministic extraction.
       return this.fallback.extract(invoice);
@@ -104,6 +106,25 @@ function extractUserPrompt(invoice: Invoice): string {
     currency: invoice.currency,
     total: invoice.total,
   });
+}
+
+// Models often wrap JSON in a ```json fence or add prose; pull out the object.
+export function extractJsonObject(content: string): Record<string, unknown> {
+  const start = content.indexOf("{");
+  const end = content.lastIndexOf("}");
+  const json = start >= 0 && end > start ? content.slice(start, end + 1) : content;
+  return JSON.parse(json) as Record<string, unknown>;
+}
+
+// Overlay model output on the defaults, skipping null/undefined and empty lines.
+function mergeDraft(defaults: InvoiceDraft, raw: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = { ...defaults };
+  for (const [key, value] of Object.entries(raw)) {
+    if (value === null || value === undefined) continue;
+    if (key === "lines" && (!Array.isArray(value) || value.length === 0)) continue;
+    out[key] = value;
+  }
+  return out;
 }
 
 // Defaults so a model that omits a field still yields a schema-valid draft.
