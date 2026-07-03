@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
   boolean,
+  date,
   index,
   integer,
   jsonb,
@@ -97,6 +98,20 @@ export const invoices = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("invoices_tenant_status_idx").on(t.tenantId, t.status), tenantPolicy(t)],
+).enableRLS();
+
+export const accountingPeriods = pgTable(
+  "accounting_periods",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    name: text("name").notNull(),
+    startsOn: date("starts_on").notNull(),
+    endsOn: date("ends_on").notNull(),
+    status: text("status").notNull().default("open"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("accounting_periods_tenant_idx").on(t.tenantId), tenantPolicy(t)],
 ).enableRLS();
 
 export const agentEvents = pgTable(

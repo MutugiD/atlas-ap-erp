@@ -1,7 +1,8 @@
 import { Hono } from "hono";
-import { createGoodsReceiptSchema, createInvoiceSchema, createPurchaseOrderSchema, createVendorSchema, updateVendorSchema } from "@atlas/contracts";
+import { createAccountingPeriodSchema, createGoodsReceiptSchema, createInvoiceSchema, createPurchaseOrderSchema, createVendorSchema, updateVendorSchema } from "@atlas/contracts";
 import { Supervisor } from "@atlas/agents";
 import { repository } from "./repository";
+import { ClosedPeriodError } from "./errors";
 import { withTenant } from "./tenant";
 
 export const app = new Hono();
@@ -123,6 +124,21 @@ v1.post("/invoices/:id/three-way-match", async (c) => {
   return c.json({ match: await repository.matchInvoice(c.get("tenant"), c.req.param("id")) });
 });
 
+v1.post("/accounting-periods", async (c) => {
+  const input = createAccountingPeriodSchema.parse(await c.req.json());
+  return c.json({ period: await repository.createAccountingPeriod(c.get("tenant"), input) }, 201);
+});
+
+v1.get("/accounting-periods", async (c) => c.json({ periods: await repository.listAccountingPeriods(c.get("tenant")) }));
+
+v1.post("/accounting-periods/:id/close", async (c) => {
+  return c.json({ period: await repository.setPeriodStatus(c.get("tenant"), c.req.param("id"), "closed") });
+});
+
+v1.post("/accounting-periods/:id/reopen", async (c) => {
+  return c.json({ period: await repository.setPeriodStatus(c.get("tenant"), c.req.param("id"), "open") });
+});
+
 v1.post("/webhooks/email-inbound", async (c) => {
   const tenant = c.get("tenant");
   const body = await c.req.json();
@@ -134,6 +150,14 @@ v1.post("/webhooks/email-inbound", async (c) => {
     currency: body.currency ?? "USD",
   });
   return c.json({ accepted: true, invoice: result.invoice }, 202);
+});
+
+// A post into a closed accounting period is a conflict, not a server error.
+app.onError((err, c) => {
+  if (err instanceof ClosedPeriodError) {
+    return c.json({ error: "accounting_period_closed", message: err.message, periodId: err.periodId }, 409);
+  }
+  throw err;
 });
 
 app.route("/v1", v1);

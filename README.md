@@ -4,7 +4,7 @@ Atlas AP ERP is an end-to-end, multi-tenant invoice-to-pay demo for an agentic E
 
 ## What Ships
 
-- `apps/api`: Hono API with tenant-scoped invoice, vendor master, purchase order, goods receipt, three-way match, event, exception, approval, reprocess, and webhook routes.
+- `apps/api`: Hono API with tenant-scoped invoice, vendor master, purchase order, goods receipt, three-way match, accounting period, event, exception, approval, reprocess, and webhook routes.
 - `apps/web`: Next.js App Router UI for inbox, invoice detail, exceptions, approvals, and ops metrics.
 - `apps/support-agent`: Fastify Support Agent V2 API with native memory, belief revision, auth seams, queue seams, metrics, and admin shell.
 - `packages/contracts`: Zod contracts shared by API, agents, DB, web, and Lambda.

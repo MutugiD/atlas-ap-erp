@@ -97,6 +97,26 @@ describeLive("Atlas AP live Postgres persistence", () => {
     await appPool.end();
   });
 
+  test("a closed accounting period blocks posting until reopened", async () => {
+    const appPool = await freshSchema();
+    const repo = new PostgresInvoiceRepository({ pool: appPool });
+
+    const period = await repo.createAccountingPeriod(ctxA, { name: "FY", startsOn: "2020-01-01", endsOn: "2099-12-31" });
+    expect(await repo.listAccountingPeriods(ctxB)).toHaveLength(0); // RLS
+    await repo.setPeriodStatus(ctxA, period.id, "closed");
+
+    const { invoice } = await repo.createInvoice(ctxA, { invoiceNumber: "PER-L", total: 100, currency: "USD" });
+    await expect(repo.updateInvoice(ctxA, { ...invoice, status: "posted" })).rejects.toThrow(/closed/i);
+    expect(await scalar(appPool, tenantA, "select count(*)::int from gl_journal_entries")).toBe(0);
+
+    await repo.setPeriodStatus(ctxA, period.id, "open");
+    const posted = await repo.updateInvoice(ctxA, { ...invoice, status: "posted" });
+    expect(posted.status).toBe("posted");
+    expect(await scalar(appPool, tenantA, "select count(*)::int from gl_journal_entries where source = 'invoice_posting'")).toBe(1);
+
+    await appPool.end();
+  });
+
   test("posting transition persists a balanced invoice_posting journal", async () => {
     const appPool = await freshSchema();
     const repo = new PostgresInvoiceRepository({ pool: appPool });
@@ -119,14 +139,15 @@ async function freshSchema(): Promise<Pool> {
   const owner = new Pool({ connectionString: ownerUrl });
   await owner.query(`
     drop table if exists reconciliations, bank_transactions, payments, payment_runs,
-      gl_journal_lines, gl_journal_entries, goods_receipts, agent_events, invoices,
-      purchase_orders, vendors, tenants cascade;
+      gl_journal_lines, gl_journal_entries, goods_receipts, accounting_periods,
+      agent_events, invoices, purchase_orders, vendors, tenants cascade;
     drop role if exists app_user;
   `);
   await owner.query(readFileSync("packages/db/migrations/0000_initial_rls.sql", "utf8"));
   await owner.query(readFileSync("packages/db/migrations/0001_api_app_role.sql", "utf8"));
   await owner.query(readFileSync("packages/db/migrations/0002_vendor_master.sql", "utf8"));
   await owner.query(readFileSync("packages/db/migrations/0003_po_goods_receipts.sql", "utf8"));
+  await owner.query(readFileSync("packages/db/migrations/0004_accounting_periods.sql", "utf8"));
   await owner.query("insert into tenants (id, name) values ($1, $2), ($3, $4)", [tenantA, "Tenant A", tenantB, "Tenant B"]);
   await owner.end();
   return new Pool({ connectionString: appRoleUrl(ownerUrl) });

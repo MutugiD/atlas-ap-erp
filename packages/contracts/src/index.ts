@@ -222,6 +222,26 @@ export const createGoodsReceiptSchema = z.object({
 });
 export type CreateGoodsReceiptInput = z.infer<typeof createGoodsReceiptSchema>;
 
+const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "expected YYYY-MM-DD");
+
+export const accountingPeriodSchema = z.object({
+  id: uuidSchema,
+  tenantId: uuidSchema,
+  name: z.string(),
+  startsOn: isoDate,
+  endsOn: isoDate,
+  status: z.enum(["open", "closed"]),
+  createdAt: z.string(),
+});
+export type AccountingPeriodRecord = z.infer<typeof accountingPeriodSchema>;
+
+export const createAccountingPeriodSchema = z.object({
+  name: z.string().min(1),
+  startsOn: isoDate,
+  endsOn: isoDate,
+});
+export type CreateAccountingPeriodInput = z.infer<typeof createAccountingPeriodSchema>;
+
 export const transitionSchema = z.object({
   from: invoiceStatusSchema,
   to: invoiceStatusSchema,
