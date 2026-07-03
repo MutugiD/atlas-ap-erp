@@ -9,6 +9,7 @@ Atlas AP ERP is an end-to-end, multi-tenant invoice-to-pay demo for an agentic E
 - `apps/support-agent`: Fastify Support Agent V2 API with native memory, belief revision, auth seams, queue seams, metrics, and admin shell.
 - `packages/contracts`: Zod contracts shared by API, agents, DB, web, and Lambda.
 - `packages/accounting`: deterministic AP accounting controls for data entry, PO matching, posting, payment runs, and bank reconciliation.
+- `packages/profitability`: deterministic agency P&L engine — gross → delivery (after labor) → overhead → net margin by account and service line, with media pass-through markup, RAG status, and month-over-month trend. See `docs/profitability.md`.
 - `packages/agents`: deterministic local supervisor plus Bedrock adapter seam.
 - `packages/db`: Drizzle schema and a handwritten RLS migration reviewed for `ENABLE ROW LEVEL SECURITY`.
 - `packages/support-contracts`, `packages/memory-engine`, `packages/support-db`: Support Agent V2 contracts, native memory engine, and pgvector/RLS schema.
