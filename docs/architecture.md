@@ -41,6 +41,15 @@ invoice). Purchase orders carry lines and drive a three-way match endpoint again
 Accounting periods can be opened/closed, and posting into a closed period is rejected (409) with no journal
 written. Credit-memo/partial-payment execution remains pending.
 
+## Agent Providers
+
+The Supervisor runs its sub-agents through a pluggable `AgentProvider`, selected by `AGENT_PROVIDER`:
+`local` (deterministic, default), `bedrock`, or `ollama`. The Ollama provider does **complexity-tiered model
+routing** — `extract` on a strong model, GL `code` on a mid model, `route` on a small/cheap model — while the
+pure-arithmetic tasks (`validate`, `match`) stay deterministic. It speaks either Ollama's native `/api/chat`
+or an OpenAI-compatible `/v1/chat/completions` endpoint (llama.cpp), and every LLM task degrades gracefully to
+the deterministic provider on any transport/parse/schema failure. See [agent-routing.md](agent-routing.md).
+
 ## Deployment
 
 The CDK stack provides the cloud path. Bedrock AgentCore/Gateway values are environment-injected because production agent setup depends on account and region availability.
