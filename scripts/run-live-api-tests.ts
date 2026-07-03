@@ -1,4 +1,6 @@
-const proc = Bun.spawn([process.execPath, "test", "tests/api-live.test.ts"], {
+// Generous timeout: each test applies the full migration set against a fresh
+// schema, which is comfortably fast on a healthy Postgres but shouldn't flake.
+const proc = Bun.spawn([process.execPath, "test", "tests/api-live.test.ts", "--timeout", "20000"], {
   stdout: "inherit",
   stderr: "inherit",
   env: {

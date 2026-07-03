@@ -1,8 +1,12 @@
 import {
   type AgentEvent,
+  type CreateGoodsReceiptInput,
   type CreateInvoiceInput,
+  type CreatePurchaseOrderInput,
   type CreateVendorInput,
+  type GoodsReceiptRecord,
   type Invoice,
+  type PurchaseOrder,
   type TenantContext,
   type UpdateVendorInput,
   type Vendor,
@@ -15,6 +19,8 @@ import {
   createPaymentRun,
   createPartialPaymentPlan,
   reconcileBankTransactions,
+  roundMoney,
+  threeWayMatch as runThreeWayMatch,
   type BankTransaction,
   type CreditMemo,
   type JournalEntry,
@@ -22,7 +28,7 @@ import {
 } from "@atlas/accounting";
 import { Pool, type PoolClient } from "pg";
 import type { InvoiceRepository } from "./repository";
-import { toAccountingInvoice, toVendorMaster, vendorMastersForInvoices } from "./mappers";
+import { toAccountingInvoice, toGoodsReceipt, toPurchaseOrderAccounting, toVendorMaster, vendorMastersForInvoices } from "./mappers";
 
 // Postgres-backed AP repository. Mirrors the transaction + RLS pattern used by
 // PostgresNativeStore in the memory engine: every unit of work runs inside a
@@ -260,6 +266,80 @@ export class PostgresInvoiceRepository implements InvoiceRepository {
     });
   }
 
+  async createPurchaseOrder(ctx: TenantContext, input: CreatePurchaseOrderInput) {
+    return this.tx(ctx.tenantId, async (client) => {
+      // vendor_id is a FK; only persist one that resolves for this tenant.
+      let vendorId: string | null = null;
+      if (input.vendorId) {
+        const vendor = await client.query("select id from vendors where id = $1 and tenant_id = $2", [input.vendorId, ctx.tenantId]);
+        vendorId = vendor.rowCount ? input.vendorId : null;
+      }
+      const total = roundMoney(input.lines.reduce((sum, line) => sum + line.total, 0));
+      const result = await client.query(
+        `insert into purchase_orders (tenant_id, po_number, vendor_id, total, currency, lines, status)
+         values ($1,$2,$3,$4,$5,$6::jsonb,'open') returning *`,
+        [ctx.tenantId, input.poNumber, vendorId, String(total), input.currency, JSON.stringify(input.lines)],
+      );
+      return rowToPurchaseOrder(result.rows[0]);
+    });
+  }
+
+  async listPurchaseOrders(ctx: TenantContext) {
+    return this.tx(ctx.tenantId, async (client) => {
+      const result = await client.query("select * from purchase_orders where tenant_id = $1 order by created_at asc", [ctx.tenantId]);
+      return result.rows.map(rowToPurchaseOrder);
+    });
+  }
+
+  async getPurchaseOrder(ctx: TenantContext, id: string) {
+    return this.tx(ctx.tenantId, async (client) => {
+      const result = await client.query("select * from purchase_orders where tenant_id = $1 and id = $2 limit 1", [ctx.tenantId, id]);
+      return result.rows[0] ? rowToPurchaseOrder(result.rows[0]) : undefined;
+    });
+  }
+
+  async createGoodsReceipt(ctx: TenantContext, input: CreateGoodsReceiptInput) {
+    return this.tx(ctx.tenantId, async (client) => {
+      const po = await client.query("select id from purchase_orders where id = $1 and tenant_id = $2", [input.poId, ctx.tenantId]);
+      if (!po.rowCount) throw new Error("Purchase order not found");
+      const result = await client.query(
+        "insert into goods_receipts (tenant_id, po_id, description, quantity_received) values ($1,$2,$3,$4) returning *",
+        [ctx.tenantId, input.poId, input.description, String(input.quantityReceived)],
+      );
+      return rowToGoodsReceipt(result.rows[0]);
+    });
+  }
+
+  async listGoodsReceipts(ctx: TenantContext, poId: string) {
+    return this.tx(ctx.tenantId, async (client) => {
+      const result = await client.query("select * from goods_receipts where tenant_id = $1 and po_id = $2 order by created_at asc", [ctx.tenantId, poId]);
+      return result.rows.map(rowToGoodsReceipt);
+    });
+  }
+
+  async matchInvoice(ctx: TenantContext, invoiceId: string) {
+    return this.tx(ctx.tenantId, async (client) => {
+      const invoiceResult = await client.query("select * from invoices where tenant_id = $1 and id = $2 limit 1", [ctx.tenantId, invoiceId]);
+      if (!invoiceResult.rowCount) throw new Error("Invoice not found");
+      const invoice = rowToInvoice(invoiceResult.rows[0]);
+      let po: PurchaseOrder | undefined;
+      let receipts: GoodsReceiptRecord[] = [];
+      if (invoice.poId) {
+        const poResult = await client.query("select * from purchase_orders where tenant_id = $1 and id = $2 limit 1", [ctx.tenantId, invoice.poId]);
+        po = poResult.rows[0] ? rowToPurchaseOrder(poResult.rows[0]) : undefined;
+        if (po) {
+          const receiptResult = await client.query("select * from goods_receipts where tenant_id = $1 and po_id = $2", [ctx.tenantId, po.id]);
+          receipts = receiptResult.rows.map(rowToGoodsReceipt);
+        }
+      }
+      return runThreeWayMatch({
+        invoice: toAccountingInvoice(invoice),
+        po: po ? toPurchaseOrderAccounting(po) : undefined,
+        receipts: receipts.map(toGoodsReceipt),
+      });
+    });
+  }
+
   async reconcilePayments(ctx: TenantContext, bankTransactions: BankTransaction[]) {
     return this.tx(ctx.tenantId, async (client) => {
       const paymentsResult = await client.query("select * from payments where tenant_id = $1", [ctx.tenantId]);
@@ -384,6 +464,31 @@ function rowToVendor(row: Record<string, unknown>): Vendor {
     paymentTermsDays: Number(row.payment_terms_days),
     defaultExpenseAccount: String(row.default_expense_account),
     currency: String(row.currency),
+    createdAt: new Date(row.created_at as string).toISOString(),
+  };
+}
+
+function rowToPurchaseOrder(row: Record<string, unknown>): PurchaseOrder {
+  return {
+    id: String(row.id),
+    tenantId: String(row.tenant_id),
+    poNumber: String(row.po_number),
+    vendorId: row.vendor_id ? String(row.vendor_id) : undefined,
+    currency: String(row.currency),
+    total: Number(row.total),
+    status: String(row.status) as PurchaseOrder["status"],
+    lines: typeof row.lines === "string" ? JSON.parse(row.lines) : ((row.lines as PurchaseOrder["lines"]) ?? []),
+    createdAt: new Date(row.created_at as string).toISOString(),
+  };
+}
+
+function rowToGoodsReceipt(row: Record<string, unknown>): GoodsReceiptRecord {
+  return {
+    id: String(row.id),
+    tenantId: String(row.tenant_id),
+    poId: String(row.po_id),
+    description: String(row.description),
+    quantityReceived: Number(row.quantity_received),
     createdAt: new Date(row.created_at as string).toISOString(),
   };
 }

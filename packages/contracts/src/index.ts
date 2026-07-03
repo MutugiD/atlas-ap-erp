@@ -177,6 +177,51 @@ export type CreateVendorInput = z.infer<typeof createVendorSchema>;
 export const updateVendorSchema = createVendorSchema.partial();
 export type UpdateVendorInput = z.infer<typeof updateVendorSchema>;
 
+export const poLineSchema = z.object({
+  description: z.string(),
+  quantity: z.number().positive(),
+  unitPrice: z.number().nonnegative(),
+  total: z.number().nonnegative(),
+});
+
+export const purchaseOrderSchema = z.object({
+  id: uuidSchema,
+  tenantId: uuidSchema,
+  poNumber: z.string(),
+  vendorId: uuidSchema.optional(),
+  currency: z.string().length(3),
+  total: z.number().nonnegative(),
+  status: z.enum(["open", "closed"]),
+  lines: z.array(poLineSchema),
+  createdAt: z.string(),
+});
+export type PurchaseOrder = z.infer<typeof purchaseOrderSchema>;
+
+export const createPurchaseOrderSchema = z.object({
+  poNumber: z.string().min(1),
+  vendorId: uuidSchema.optional(),
+  currency: z.string().length(3).default("USD"),
+  lines: z.array(poLineSchema).min(1),
+});
+export type CreatePurchaseOrderInput = z.infer<typeof createPurchaseOrderSchema>;
+
+export const goodsReceiptSchema = z.object({
+  id: uuidSchema,
+  tenantId: uuidSchema,
+  poId: uuidSchema,
+  description: z.string(),
+  quantityReceived: z.number().nonnegative(),
+  createdAt: z.string(),
+});
+export type GoodsReceiptRecord = z.infer<typeof goodsReceiptSchema>;
+
+export const createGoodsReceiptSchema = z.object({
+  poId: uuidSchema,
+  description: z.string().min(1),
+  quantityReceived: z.number().nonnegative(),
+});
+export type CreateGoodsReceiptInput = z.infer<typeof createGoodsReceiptSchema>;
+
 export const transitionSchema = z.object({
   from: invoiceStatusSchema,
   to: invoiceStatusSchema,

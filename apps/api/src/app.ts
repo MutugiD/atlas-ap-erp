@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { createInvoiceSchema, createVendorSchema, updateVendorSchema } from "@atlas/contracts";
+import { createGoodsReceiptSchema, createInvoiceSchema, createPurchaseOrderSchema, createVendorSchema, updateVendorSchema } from "@atlas/contracts";
 import { Supervisor } from "@atlas/agents";
 import { repository } from "./repository";
 import { withTenant } from "./tenant";
@@ -96,6 +96,31 @@ v1.get("/vendors/:id", async (c) => {
 v1.patch("/vendors/:id", async (c) => {
   const patch = updateVendorSchema.parse(await c.req.json());
   return c.json({ vendor: await repository.updateVendor(c.get("tenant"), c.req.param("id"), patch) });
+});
+
+v1.post("/purchase-orders", async (c) => {
+  const input = createPurchaseOrderSchema.parse(await c.req.json());
+  return c.json({ purchaseOrder: await repository.createPurchaseOrder(c.get("tenant"), input) }, 201);
+});
+
+v1.get("/purchase-orders", async (c) => c.json({ purchaseOrders: await repository.listPurchaseOrders(c.get("tenant")) }));
+
+v1.get("/purchase-orders/:id", async (c) => {
+  const purchaseOrder = await repository.getPurchaseOrder(c.get("tenant"), c.req.param("id"));
+  return purchaseOrder ? c.json({ purchaseOrder }) : c.notFound();
+});
+
+v1.post("/goods-receipts", async (c) => {
+  const input = createGoodsReceiptSchema.parse(await c.req.json());
+  return c.json({ goodsReceipt: await repository.createGoodsReceipt(c.get("tenant"), input) }, 201);
+});
+
+v1.get("/purchase-orders/:id/goods-receipts", async (c) => {
+  return c.json({ goodsReceipts: await repository.listGoodsReceipts(c.get("tenant"), c.req.param("id")) });
+});
+
+v1.post("/invoices/:id/three-way-match", async (c) => {
+  return c.json({ match: await repository.matchInvoice(c.get("tenant"), c.req.param("id")) });
 });
 
 v1.post("/webhooks/email-inbound", async (c) => {

@@ -72,6 +72,31 @@ describeLive("Atlas AP live Postgres persistence", () => {
     await appPool.end();
   });
 
+  test("purchase order + goods receipt persist and drive a clean three-way match", async () => {
+    const appPool = await freshSchema();
+    const repo = new PostgresInvoiceRepository({ pool: appPool });
+
+    const vendor = await repo.createVendor(ctxA, { name: "Widgets Co", currency: "USD", active: true, holdPayments: false, paymentTermsDays: 30, defaultExpenseAccount: "6100" });
+    const po = await repo.createPurchaseOrder(ctxA, { poNumber: "PO-L1", vendorId: vendor.id, currency: "USD", lines: [{ description: "Widgets", quantity: 1, unitPrice: 1000, total: 1000 }] });
+    expect(po.total).toBe(1000);
+
+    // PO + receipts are tenant-isolated.
+    expect(await repo.getPurchaseOrder(ctxB, po.id)).toBeUndefined();
+
+    await repo.createGoodsReceipt(ctxA, { poId: po.id, description: "Widgets", quantityReceived: 1 });
+    expect(await repo.listGoodsReceipts(ctxA, po.id)).toHaveLength(1);
+    expect(await repo.listGoodsReceipts(ctxB, po.id)).toHaveLength(0);
+
+    const { invoice } = await repo.createInvoice(ctxA, { vendorName: "Widgets", vendorId: vendor.id, invoiceNumber: "PO-L-INV", total: 1000, currency: "USD", poId: po.id });
+    expect(invoice.poId).toBe(po.id);
+
+    const match = await repo.matchInvoice(ctxA, invoice.id);
+    expect(match.ok).toBe(true);
+    expect(match.amountVariance).toBe(0);
+
+    await appPool.end();
+  });
+
   test("posting transition persists a balanced invoice_posting journal", async () => {
     const appPool = await freshSchema();
     const repo = new PostgresInvoiceRepository({ pool: appPool });
@@ -94,13 +119,14 @@ async function freshSchema(): Promise<Pool> {
   const owner = new Pool({ connectionString: ownerUrl });
   await owner.query(`
     drop table if exists reconciliations, bank_transactions, payments, payment_runs,
-      gl_journal_lines, gl_journal_entries, agent_events, invoices, purchase_orders,
-      vendors, tenants cascade;
+      gl_journal_lines, gl_journal_entries, goods_receipts, agent_events, invoices,
+      purchase_orders, vendors, tenants cascade;
     drop role if exists app_user;
   `);
   await owner.query(readFileSync("packages/db/migrations/0000_initial_rls.sql", "utf8"));
   await owner.query(readFileSync("packages/db/migrations/0001_api_app_role.sql", "utf8"));
   await owner.query(readFileSync("packages/db/migrations/0002_vendor_master.sql", "utf8"));
+  await owner.query(readFileSync("packages/db/migrations/0003_po_goods_receipts.sql", "utf8"));
   await owner.query("insert into tenants (id, name) values ($1, $2), ($3, $4)", [tenantA, "Tenant A", tenantB, "Tenant B"]);
   await owner.end();
   return new Pool({ connectionString: appRoleUrl(ownerUrl) });

@@ -91,10 +91,12 @@ RLS coverage:
 - Vendor master CRUD (`/v1/vendors`): create/list/get/update with `active`, `hold_payments`,
   `payment_terms_days`, `default_expense_account`, `currency`. Invoices link to a vendor via `vendorId`, and
   payment runs use the real vendor master (a payment hold excludes the invoice) instead of a synthetic stub.
+- Purchase order CRUD (`/v1/purchase-orders`) with lines/status, goods-receipt capture (`/v1/goods-receipts`,
+  `/v1/purchase-orders/:id/goods-receipts`), and a three-way match endpoint
+  (`POST /v1/invoices/:id/three-way-match`) that runs the accounting `threeWayMatch` against the invoice's
+  persisted PO and goods receipts. Covered by fast and live tests.
 
 ## Pending
-
-- Add purchase order and goods-receipt CRUD APIs.
 - Add accounting-period close/reopen workflow.
 - Add credit-memo and partial-payment execution/persistence (currently calculation-only).
 - Add debit memos, withholding tax, and multi-currency realized FX journal posting.
