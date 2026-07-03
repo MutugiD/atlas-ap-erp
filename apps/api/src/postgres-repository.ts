@@ -2,10 +2,12 @@ import {
   type AccountingPeriodRecord,
   type AgentEvent,
   type CreateAccountingPeriodInput,
+  type CreateCreditMemoInput,
   type CreateGoodsReceiptInput,
   type CreateInvoiceInput,
   type CreatePurchaseOrderInput,
   type CreateVendorInput,
+  type CreditMemoRecord,
   type GoodsReceiptRecord,
   type Invoice,
   type PurchaseOrder,
@@ -31,7 +33,7 @@ import {
 import { Pool, type PoolClient } from "pg";
 import type { InvoiceRepository } from "./repository";
 import { ClosedPeriodError } from "./errors";
-import { toAccountingInvoice, toGoodsReceipt, toPurchaseOrderAccounting, toVendorMaster, vendorMastersForInvoices } from "./mappers";
+import { toAccountingCreditMemo, toAccountingInvoice, toGoodsReceipt, toPurchaseOrderAccounting, toVendorMaster, vendorMastersForInvoices } from "./mappers";
 
 // Postgres-backed AP repository. Mirrors the transaction + RLS pattern used by
 // PostgresNativeStore in the memory engine: every unit of work runs inside a
@@ -377,6 +379,61 @@ export class PostgresInvoiceRepository implements InvoiceRepository {
     });
   }
 
+  async createCreditMemo(ctx: TenantContext, input: CreateCreditMemoInput) {
+    return this.tx(ctx.tenantId, async (client) => {
+      let vendorId: string | null = null;
+      if (input.vendorId) {
+        const vendor = await client.query("select id from vendors where id = $1 and tenant_id = $2", [input.vendorId, ctx.tenantId]);
+        vendorId = vendor.rowCount ? input.vendorId : null;
+      }
+      const result = await client.query(
+        "insert into credit_memos (tenant_id, vendor_id, amount, currency, status) values ($1,$2,$3,$4,'available') returning *",
+        [ctx.tenantId, vendorId, String(input.amount), input.currency],
+      );
+      return rowToCreditMemo(result.rows[0]);
+    });
+  }
+
+  async listCreditMemos(ctx: TenantContext) {
+    return this.tx(ctx.tenantId, async (client) => {
+      const result = await client.query("select * from credit_memos where tenant_id = $1 order by created_at asc", [ctx.tenantId]);
+      return result.rows.map(rowToCreditMemo);
+    });
+  }
+
+  async applyAvailableCredits(ctx: TenantContext, invoiceId: string) {
+    return this.tx(ctx.tenantId, async (client) => {
+      const invoiceResult = await client.query("select * from invoices where tenant_id = $1 and id = $2 limit 1", [ctx.tenantId, invoiceId]);
+      if (!invoiceResult.rowCount) throw new Error("Invoice not found");
+      const invoice = rowToInvoice(invoiceResult.rows[0]);
+      const memoResult = await client.query(
+        "select * from credit_memos where tenant_id = $1 and status = 'available' and vendor_id is not distinct from $2 order by created_at asc",
+        [ctx.tenantId, invoice.vendorId ?? null],
+      );
+      const available = memoResult.rows.map(rowToCreditMemo);
+      const result = applyCreditMemos({ invoice: toAccountingInvoice(invoice), creditMemos: available.map(toAccountingCreditMemo) });
+
+      for (const application of result.applications) {
+        await client.query(
+          "insert into credit_memo_applications (tenant_id, credit_memo_id, invoice_id, amount_applied) values ($1,$2,$3,$4)",
+          [ctx.tenantId, application.creditMemoId, invoiceId, String(application.amountApplied)],
+        );
+      }
+      for (const memo of available) {
+        const applied = result.applications.filter((a) => a.creditMemoId === memo.id).reduce((sum, a) => sum + a.amountApplied, 0);
+        if (applied <= 0) continue;
+        const remaining = Math.round((memo.amount - applied) * 100) / 100;
+        await client.query("update credit_memos set amount = $3, status = $4 where tenant_id = $1 and id = $2", [
+          ctx.tenantId,
+          memo.id,
+          String(remaining),
+          remaining <= 0 ? "applied" : "available",
+        ]);
+      }
+      return result;
+    });
+  }
+
   async reconcilePayments(ctx: TenantContext, bankTransactions: BankTransaction[]) {
     return this.tx(ctx.tenantId, async (client) => {
       const paymentsResult = await client.query("select * from payments where tenant_id = $1", [ctx.tenantId]);
@@ -513,6 +570,18 @@ function toDateString(value: unknown): string {
     return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
   }
   return String(value);
+}
+
+function rowToCreditMemo(row: Record<string, unknown>): CreditMemoRecord {
+  return {
+    id: String(row.id),
+    tenantId: String(row.tenant_id),
+    vendorId: row.vendor_id ? String(row.vendor_id) : undefined,
+    amount: Number(row.amount),
+    currency: String(row.currency),
+    status: String(row.status) as CreditMemoRecord["status"],
+    createdAt: new Date(row.created_at as string).toISOString(),
+  };
 }
 
 function rowToAccountingPeriod(row: Record<string, unknown>): AccountingPeriodRecord {

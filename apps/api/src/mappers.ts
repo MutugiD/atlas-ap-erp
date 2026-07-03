@@ -1,5 +1,5 @@
-import { type GoodsReceiptRecord, type Invoice, type PurchaseOrder, type Vendor } from "@atlas/contracts";
-import { type AccountingInvoice, type GoodsReceipt, type PurchaseOrderAccounting, type VendorMaster } from "@atlas/accounting";
+import { type CreditMemoRecord, type GoodsReceiptRecord, type Invoice, type PurchaseOrder, type Vendor } from "@atlas/contracts";
+import { type AccountingInvoice, type CreditMemo, type GoodsReceipt, type PurchaseOrderAccounting, type VendorMaster } from "@atlas/accounting";
 
 // Shared mapping from the persisted Invoice shape to the accounting-engine
 // inputs, used by both the in-memory and Postgres repositories.
@@ -64,6 +64,10 @@ export function toPurchaseOrderAccounting(po: PurchaseOrder): PurchaseOrderAccou
 
 export function toGoodsReceipt(receipt: GoodsReceiptRecord): GoodsReceipt {
   return { poId: receipt.poId, description: receipt.description, quantityReceived: receipt.quantityReceived };
+}
+
+export function toAccountingCreditMemo(memo: CreditMemoRecord): CreditMemo {
+  return { id: memo.id, vendorId: memo.vendorId ?? "", amount: memo.amount, currency: memo.currency, status: memo.status };
 }
 
 // Build the VendorMaster list a payment run needs: use the real vendor master

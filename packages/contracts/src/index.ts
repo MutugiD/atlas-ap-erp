@@ -242,6 +242,24 @@ export const createAccountingPeriodSchema = z.object({
 });
 export type CreateAccountingPeriodInput = z.infer<typeof createAccountingPeriodSchema>;
 
+export const creditMemoRecordSchema = z.object({
+  id: uuidSchema,
+  tenantId: uuidSchema,
+  vendorId: uuidSchema.optional(),
+  amount: z.number().nonnegative(),
+  currency: z.string().length(3),
+  status: z.enum(["available", "applied", "void"]),
+  createdAt: z.string(),
+});
+export type CreditMemoRecord = z.infer<typeof creditMemoRecordSchema>;
+
+export const createCreditMemoSchema = z.object({
+  vendorId: uuidSchema.optional(),
+  amount: z.number().positive(),
+  currency: z.string().length(3).default("USD"),
+});
+export type CreateCreditMemoInput = z.infer<typeof createCreditMemoSchema>;
+
 export const transitionSchema = z.object({
   from: invoiceStatusSchema,
   to: invoiceStatusSchema,

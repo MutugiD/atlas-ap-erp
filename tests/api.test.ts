@@ -223,6 +223,30 @@ describe("Hono API", () => {
     expect((await unblocked.json()).invoice.status).toBe("queued_for_payment");
   });
 
+  test("applies persisted credit memos to an invoice and updates their balances", async () => {
+    const kHeaders = { ...headers, "x-tenant-id": "aaaaaaaa-aaaa-4aaa-8aaa-000000000001" };
+    const vendor = await createVendorFor(kHeaders, "Credit Vendor");
+    const invoice = (await (await app.request("/v1/invoices", {
+      method: "POST",
+      headers: kHeaders,
+      body: JSON.stringify({ vendorName: "Credit Vendor", vendorId: vendor.id, invoiceNumber: "CM-INV", total: 1000, currency: "USD" }),
+    })).json()).invoice;
+
+    const memoA = (await (await app.request("/v1/credit-memos", { method: "POST", headers: kHeaders, body: JSON.stringify({ vendorId: vendor.id, amount: 300, currency: "USD" }) })).json()).creditMemo;
+    const memoB = (await (await app.request("/v1/credit-memos", { method: "POST", headers: kHeaders, body: JSON.stringify({ vendorId: vendor.id, amount: 800, currency: "USD" }) })).json()).creditMemo;
+
+    const applied = (await (await app.request(`/v1/invoices/${invoice.id}/apply-credits`, { method: "POST", headers: kHeaders })).json()).result;
+    expect(applied.netPayable).toBe(0);
+    expect(applied.applications).toHaveLength(2);
+
+    const memos = (await (await app.request("/v1/credit-memos", { headers: kHeaders })).json()).creditMemos;
+    const a = memos.find((m: { id: string }) => m.id === memoA.id);
+    const b = memos.find((m: { id: string }) => m.id === memoB.id);
+    expect(a.status).toBe("applied");
+    expect(b.status).toBe("available");
+    expect(b.amount).toBe(100);
+  });
+
   test("serves accounting credit, partial payment, aging, and FX endpoints", async () => {
     const create = await app.request("/v1/invoices", {
       method: "POST",
