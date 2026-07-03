@@ -4,6 +4,7 @@ WORKDIR /app
 COPY package.json bun.lock tsconfig.json ./
 COPY apps ./apps
 COPY packages ./packages
+COPY infra ./infra
 RUN bun install --frozen-lockfile
 
 ENV PORT=3002

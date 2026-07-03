@@ -32,3 +32,21 @@ After an invoice reaches payable status, the accounting layer can produce a post
 ## Deployment
 
 The CDK stack provides the cloud path. Bedrock AgentCore/Gateway values are environment-injected because production agent setup depends on account and region availability.
+
+Container delivery is automated: on pushes to `main` and `v*` tags, CI builds and publishes the
+support-agent image to GHCR (`ghcr.io/<owner>/atlas-support-agent`), gated behind the full `verify` job.
+
+## CI/CD and Security Posture
+
+Quality and security are enforced in the pipeline rather than by convention. Every pull request must pass:
+
+- **Build gate** (`verify`): frozen-lockfile install, ESLint, `bun audit`, license audit, release check,
+  the full test suite, live Postgres/Redis integration (RLS isolation, queue, AP persistence), typecheck,
+  app/infra builds, and the container build.
+- **SAST**: CodeQL (`security-and-quality`) analyses the JS/TS on every PR and weekly.
+- **Supply chain**: dependency-review blocks PRs that add high-severity-vulnerable packages; Dependabot
+  proposes weekly dependency and Actions updates; `bun audit` fails the build on any known vulnerability in
+  the resolved tree.
+- **Secrets**: Gitleaks plus GitHub-native secret scanning with push protection.
+
+See `docs/ci-cd.md` for the full pipeline reference.

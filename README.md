@@ -23,6 +23,8 @@ PowerShell on this machine blocks npm's `bun.ps1` shim, so use `bun.cmd` if `bun
 ```powershell
 npm install -g bun
 bun.cmd install
+bun.cmd run lint
+bun.cmd run audit
 bun.cmd test
 bun.cmd run license:audit
 bun.cmd run release:check
@@ -72,9 +74,17 @@ The accounting-cycle layer adds vendor master checks, invoice arithmetic validat
 
 Support Agent V2 adds a native belief-revision memory engine: deterministic fact extraction, PII redaction, local embeddings seam, idempotent writes, supersession lineage, context retrieval, stateless mode, Postgres/pgvector persistence seam, BullMQ durable ingest seam, JWT/API-key auth, per-tenant rate limiting, and a 13-capability contract suite.
 
+## CI/CD and Security
+
+Every pull request and every push to `main`/`v*` runs a full gate: frozen-lockfile install, ESLint,
+`bun audit`, license audit, release check, the test suite, live Postgres/Redis integration, typecheck,
+app/infra builds, and the container build. Security scanning runs in parallel: CodeQL (SAST), dependency
+review, Gitleaks secret scanning, and Dependabot updates. On pushes to `main`/`v*` a gated `publish-image`
+job pushes the support-agent image to GHCR. Full reference: `docs/ci-cd.md`.
+
 ## Support Agent V2 Release Gates
 
-- CI runs install, license audit, tests, TypeScript checks, Support Agent build, Next.js build, CDK synth, Docker Compose config, and Support Agent image build.
+- CI runs install, lint, dependency audit, license audit, release check, tests, live integration, TypeScript checks, Support Agent build, Next.js build, CDK synth, Docker Compose config, and Support Agent image build; CodeQL, dependency review, and Gitleaks run as separate security workflows.
 - `docs/support-agent-v2-slo.md` and `docs/support-agent-v2-release-checklist.md` define rollout, rollback, SLO, and release evidence gates.
 - `ops/grafana/support-agent-dashboard.json` covers request rate, p95 latency, ingest results, context reuse, queue depth, DLQ depth, and readiness failures.
 - `ops/alerts/support-agent-alerts.yml` covers high latency, DLQ backlog, queue backlog, readiness failure, and low memory-context reuse.

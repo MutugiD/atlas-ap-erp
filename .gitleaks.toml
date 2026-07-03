@@ -1,0 +1,23 @@
+title = "atlas-ap-erp gitleaks config"
+
+# Start from the maintained default ruleset, then allowlist known non-secrets.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Local/CI test credentials and non-secret fixtures (not real secrets)"
+# These are throwaway Postgres roles/passwords used only by local Docker and CI
+# service containers; they never grant access to any real environment.
+regexes = [
+  '''atlas_owner''',
+  '''support_app_user''',
+  '''app_user''',
+]
+paths = [
+  '''packages/db/migrations/.*''',
+  '''packages/support-db/migrations/.*''',
+  '''tests/.*''',
+  '''docker-compose\.yml''',
+  '''docs/.*''',
+  '''.*\.log''',
+]

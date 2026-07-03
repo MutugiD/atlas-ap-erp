@@ -14,6 +14,8 @@
     "dev:web": "bun --filter @atlas/web dev",
     "dev:support": "bun --filter @atlas/support-agent dev",
     "test": "bun test",
+    "lint": "eslint .",
+    "audit": "bun audit",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "infra:synth": "bun --filter @atlas/infra synth",
     "db:generate": "drizzle-kit generate --config packages/db/drizzle.config.ts",
@@ -32,7 +34,7 @@
     "bullmq": "^5.31.0",
     "constructs": "^10.4.2",
     "cockatiel": "^3.2.1",
-    "drizzle-orm": "^0.36.4",
+    "drizzle-orm": "^0.45.2",
     "fastify": "^5.2.1",
     "hono": "^4.6.12",
     "ioredis": "^5.4.2",
@@ -46,6 +48,7 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/aws-lambda": "^8.10.147",
     "@types/bun": "^1.1.14",
     "@types/node": "^20.17.6",
@@ -53,7 +56,14 @@
     "@types/react": "^19.0.2",
     "@types/react-dom": "^19.0.2",
     "aws-cdk": "^2.171.1",
-    "drizzle-kit": "^0.27.1",
-    "typescript": "^5.7.2"
+    "drizzle-kit": "^0.31.10",
+    "eslint": "^9",
+    "globals": "^17.7.0",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.62.1"
+  },
+  "overrides": {
+    "postcss": ">=8.5.10",
+    "esbuild": ">=0.25.0"
   }
 }

@@ -51,3 +51,20 @@ Operator endpoints:
 - `POST /api/admin/api-keys`
 
 Prometheus metrics are exposed at `GET /metrics`. Import `ops/grafana/support-agent-dashboard.json` and apply `ops/alerts/support-agent-alerts.yml` in the Prometheus-compatible alert manager.
+
+## CI/CD
+
+CI (`.github/workflows/ci.yml`, job `verify`) runs on every pull request and on pushes to `main` and `v*`
+tags: install (frozen lockfile), license audit, release check, tests, live Support Agent + AP integration,
+typecheck, app builds, CDK synth, and the container build.
+
+CD is the gated `publish-image` job in the same workflow. It `needs: verify`, runs only on pushes (never on
+pull requests), and publishes the support-agent image to GHCR at
+`ghcr.io/<owner>/atlas-support-agent` — tagged with the branch, commit SHA, `latest` on the default branch,
+and the semver on `v*` tags. Authentication uses the built-in `GITHUB_TOKEN` (`packages: write`); no extra
+secrets are required. Deploy by pulling the published tag onto the target host; readiness is gated on
+`GET /health/ready`.
+
+Security scanning runs as separate workflows: CodeQL (SAST) on PRs, pushes, and weekly; dependency review on
+PRs; and Gitleaks secret scanning. Dependabot proposes weekly dependency and Actions updates. See
+`docs/ci-cd.md` for the complete reference.
