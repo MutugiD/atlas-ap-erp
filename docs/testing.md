@@ -19,14 +19,19 @@ docker compose config --quiet
 resolved dependency tree. Both are enforced in CI alongside CodeQL, dependency review, and secret scanning —
 see `docs/ci-cd.md`.
 
-Live Support Agent integration:
+Live integration (Support Agent + AP persistence):
 
 ```powershell
 docker compose up -d postgres redis
 $env:DATABASE_URL="postgresql://atlas_owner:atlas_owner@localhost:5432/atlas_ap"
 $env:REDIS_URL="redis://localhost:6379"
 bun.cmd run test:live-support
+bun.cmd run test:live-api
 ```
+
+`test:live-api` applies the AP migrations, then asserts app-role RLS isolation across tenants and that
+payment runs and posting transitions persist balanced GL journals. Both live suites are skipped unless their
+`RUN_LIVE_*` flag is set (the scripts set it) and are gated in CI on Postgres/Redis service containers.
 
 The test suite covers:
 

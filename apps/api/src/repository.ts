@@ -8,14 +8,14 @@ import {
   createPaymentRun,
   createPartialPaymentPlan,
   reconcileBankTransactions,
-  type AccountingInvoice,
   type BankTransaction,
   type CreditMemo,
   type JournalEntry,
   type Payment,
   type PaymentRun,
-  type VendorMaster,
 } from "@atlas/accounting";
+import { toAccountingInvoice, toVendorMaster } from "./mappers";
+import { PostgresInvoiceRepository } from "./postgres-repository";
 
 const now = () => new Date().toISOString();
 
@@ -172,44 +172,9 @@ export class InMemoryInvoiceRepository implements InvoiceRepository {
   }
 }
 
-export const repository = new InMemoryInvoiceRepository();
-
-function toAccountingInvoice(invoice: Invoice): AccountingInvoice {
-  const subtotal = invoice.extracted?.subtotal ?? invoice.total;
-  const tax = invoice.extracted?.tax ?? 0;
-  const lines = invoice.extracted?.lines ?? [{ description: invoice.vendorName ?? "Invoice", quantity: 1, unitPrice: subtotal, total: subtotal }];
-  return {
-    id: invoice.id,
-    vendorId: invoice.vendorId ?? `vendor:${invoice.vendorName ?? "unknown"}`,
-    vendorName: invoice.vendorName ?? "Unknown vendor",
-    invoiceNumber: invoice.invoiceNumber ?? invoice.id.slice(0, 8),
-    invoiceDate: invoice.extracted?.invoiceDate ?? invoice.createdAt.slice(0, 10),
-    postingDate: invoice.updatedAt.slice(0, 10),
-    dueDate: invoice.updatedAt.slice(0, 10),
-    currency: invoice.currency,
-    subtotal,
-    tax,
-    total: invoice.total,
-    lines,
-    status: toAccountingStatus(invoice.status),
-    poId: invoice.poId,
-  };
-}
-
-function toVendorMaster(invoice: Pick<Invoice, "vendorId" | "vendorName" | "currency"> & { id?: string }): VendorMaster {
-  return {
-    id: invoice.vendorId ?? `vendor:${invoice.vendorName ?? "unknown"}`,
-    name: invoice.vendorName ?? "Unknown vendor",
-    taxId: "LOCAL-TAX-ID",
-    active: true,
-    paymentTermsDays: 30,
-    defaultExpenseAccount: "6100",
-    currency: invoice.currency,
-  };
-}
-
-function toAccountingStatus(status: Invoice["status"]): AccountingInvoice["status"] {
-  if (status === "rejected" || status === "coded") return "exception";
-  if (status === "extracted" || status === "received") return "received";
-  return status;
-}
+// Default repository: Postgres-backed when DATABASE_URL is configured, otherwise
+// the in-memory implementation so local runs and the fast test suite need no DB.
+// (Mirrors createDefaultStore() in the Support Agent app.)
+export const repository: InvoiceRepository = process.env.DATABASE_URL
+  ? new PostgresInvoiceRepository()
+  : new InMemoryInvoiceRepository();

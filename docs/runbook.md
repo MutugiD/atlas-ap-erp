@@ -66,5 +66,5 @@ secrets are required. Deploy by pulling the published tag onto the target host; 
 `GET /health/ready`.
 
 Security scanning runs as separate workflows: CodeQL (SAST) on PRs, pushes, and weekly; dependency review on
-PRs; and Gitleaks secret scanning. Dependabot proposes weekly dependency and Actions updates. See
-`docs/ci-cd.md` for the complete reference.
+PRs; and Gitleaks secret scanning. Dependabot security updates open a PR only when a dependency has a known
+vulnerability (no routine version-bump PRs). See `docs/ci-cd.md` for the complete reference.

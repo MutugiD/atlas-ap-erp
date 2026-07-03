@@ -56,6 +56,10 @@ jobs:
         env:
           DATABASE_URL: postgresql://atlas_owner:atlas_owner@localhost:5432/atlas_ap
           REDIS_URL: redis://localhost:6379
+      - name: Live AP persistence integration
+        run: bun run test:live-api
+        env:
+          DATABASE_URL: postgresql://atlas_owner:atlas_owner@localhost:5432/atlas_ap
       - name: Typecheck
         run: bun run typecheck
       - name: Support Agent build

@@ -13,8 +13,10 @@ The pipeline is defined entirely in `.github/workflows/` and runs on every pull 
 | Dependency review | `.github/workflows/dependency-review.yml` | PR | Fails a PR that introduces a dependency with a known **high**-severity advisory. |
 | Gitleaks | `.github/workflows/gitleaks.yml` | PR, push to `main` | Secret scanning over the diff/history (config: `.gitleaks.toml`). |
 
-Automated dependency and GitHub Actions updates are proposed weekly by Dependabot (`.github/dependabot.yml`).
-GitHub-native secret scanning and push protection are also enabled on the repository.
+Dependabot **security** updates are enabled at the repository level — it opens a PR only when a dependency
+has a known vulnerability, not for routine version bumps. Day-to-day dependency vetting is handled by the
+`bun audit` gate and the dependency-review workflow. GitHub-native secret scanning and push protection are
+also enabled on the repository.
 
 ## The `verify` job (in order)
 

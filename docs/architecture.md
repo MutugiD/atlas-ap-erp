@@ -29,6 +29,15 @@ After an invoice reaches payable status, the accounting layer can produce a post
 - Payment runs clear AP and credit cash only for payable, due, non-held invoices.
 - Bank reconciliation matches cash disbursements to bank debits and reports unmatched exceptions.
 
+### Persistence
+
+The API repository is swappable behind the `InvoiceRepository` interface: in-memory by default, and
+Postgres-backed (`PostgresInvoiceRepository`) when `DATABASE_URL` is set. The Postgres path runs every unit
+of work inside a transaction that first sets `app.tenant_id`, so row-level security applies, and persists
+invoices, agent events, GL journal entries/lines (posting and payment-run journals), payment runs, payments,
+bank transactions, and reconciliations. Vendor/PO/goods-receipt master data and credit-memo/partial-payment
+execution remain calculation-only pending their own CRUD/workflow layers.
+
 ## Deployment
 
 The CDK stack provides the cloud path. Bedrock AgentCore/Gateway values are environment-injected because production agent setup depends on account and region availability.
@@ -44,9 +53,9 @@ Quality and security are enforced in the pipeline rather than by convention. Eve
   the full test suite, live Postgres/Redis integration (RLS isolation, queue, AP persistence), typecheck,
   app/infra builds, and the container build.
 - **SAST**: CodeQL (`security-and-quality`) analyses the JS/TS on every PR and weekly.
-- **Supply chain**: dependency-review blocks PRs that add high-severity-vulnerable packages; Dependabot
-  proposes weekly dependency and Actions updates; `bun audit` fails the build on any known vulnerability in
-  the resolved tree.
+- **Supply chain**: dependency-review blocks PRs that add high-severity-vulnerable packages; `bun audit`
+  fails the build on any known vulnerability in the resolved tree; Dependabot security updates open a PR only
+  when a dependency has a known vulnerability.
 - **Secrets**: Gitleaks plus GitHub-native secret scanning with push protection.
 
 See `docs/ci-cd.md` for the full pipeline reference.

@@ -21,6 +21,7 @@
     "db:generate": "drizzle-kit generate --config packages/db/drizzle.config.ts",
     "license:audit": "bun run scripts/license-audit.ts",
     "test:live-support": "bun run scripts/run-live-support-tests.ts",
+    "test:live-api": "bun run scripts/run-live-api-tests.ts",
     "release:check": "bun run scripts/support-release-check.ts"
   },
   "dependencies": {
