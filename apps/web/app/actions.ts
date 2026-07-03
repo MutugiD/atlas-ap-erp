@@ -24,15 +24,28 @@ export async function createInvoice(formData: FormData) {
   revalidatePath("/");
 }
 
+export async function createVendor(formData: FormData) {
+  const body = {
+    name: String(formData.get("name") ?? "").trim(),
+    currency: String(formData.get("currency") ?? "USD") || "USD",
+    taxId: String(formData.get("taxId") ?? "").trim() || undefined,
+  };
+  await fetch(`${apiBase}/v1/vendors`, { method: "POST", headers, body: JSON.stringify(body) });
+  revalidatePath("/", "layout");
+}
+
 export async function approveInvoice(id: string) {
   await fetch(`${apiBase}/v1/invoices/${id}/approve`, { method: "POST", headers });
+  revalidatePath("/", "layout");
 }
 
 export async function rejectInvoice(id: string) {
   await fetch(`${apiBase}/v1/invoices/${id}/reject`, { method: "POST", headers });
+  revalidatePath("/", "layout");
 }
 
 export async function reprocessInvoice(id: string) {
   await fetch(`${apiBase}/v1/invoices/${id}/reprocess`, { method: "POST", headers });
+  revalidatePath("/", "layout");
 }
 
