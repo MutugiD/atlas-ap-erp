@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "synth": "cdk synth --app 'bun run bin/app.ts'"
+    "synth": "cdk synth --app 'bun run bin/app.ts'",
+    "deploy": "cdk deploy --app 'bun run bin/app.ts' --require-approval never",
+    "diff": "cdk diff --app 'bun run bin/app.ts'",
+    "destroy": "cdk destroy --app 'bun run bin/app.ts' --force"
   }
 }

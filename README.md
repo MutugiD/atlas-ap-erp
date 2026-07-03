@@ -77,7 +77,7 @@ Set these before deploying CDK:
 - `BEDROCK_AGENTCORE_RUNTIME_ARN`
 - `AGENT_PROVIDER=bedrock`
 
-The CDK stack creates the document bucket, processing queue, DLQ, Lambda processor, RDS instance, and IAM boundaries. Bedrock AgentCore/Gateway identifiers are injected as configuration because account-level Bedrock setup varies.
+The CDK stack creates the VPC, encrypted RDS Postgres (backups + security groups), ElastiCache Redis, the support-agent service on Fargate behind an ALB (health-checked on `/health/ready`), the S3 document bucket, SQS processing queue + DLQ, in-VPC Lambda processor, IAM boundaries, and stack outputs. Bedrock AgentCore/Gateway identifiers are injected as configuration because account-level Bedrock setup varies. Full deploy guide (prerequisites, OIDC role, deploy workflow, rollback): `docs/deploy.md`.
 
 ## Interview Narrative
 
