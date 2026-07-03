@@ -214,6 +214,20 @@ export const creditMemoApplications = pgTable(
   (t) => [index("credit_memo_applications_tenant_invoice_idx").on(t.tenantId, t.invoiceId), tenantPolicy(t)],
 ).enableRLS();
 
+export const partialPayments = pgTable(
+  "partial_payments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    invoiceId: uuid("invoice_id").notNull().references(() => invoices.id),
+    amount: numeric("amount", { precision: 14, scale: 2 }).notNull(),
+    currency: text("currency").notNull(),
+    status: text("status").notNull().default("paid"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("partial_payments_tenant_invoice_idx").on(t.tenantId, t.invoiceId), tenantPolicy(t)],
+).enableRLS();
+
 export const bankTransactions = pgTable(
   "bank_transactions",
   {

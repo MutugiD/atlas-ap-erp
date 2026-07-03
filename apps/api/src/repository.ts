@@ -10,6 +10,7 @@ import {
   type CreditMemoRecord,
   type GoodsReceiptRecord,
   type Invoice,
+  type PartialPaymentRecord,
   type PurchaseOrder,
   type TenantContext,
   type UpdateVendorInput,
@@ -69,6 +70,15 @@ export interface InvoiceRepository extends AgentRepository {
   createCreditMemo(ctx: TenantContext, input: CreateCreditMemoInput): Promise<CreditMemoRecord>;
   listCreditMemos(ctx: TenantContext): Promise<CreditMemoRecord[]>;
   applyAvailableCredits(ctx: TenantContext, invoiceId: string): Promise<ReturnType<typeof applyCreditMemos>>;
+  executePartialPayment(ctx: TenantContext, invoiceId: string, requestedAmount: number): Promise<PartialPaymentExecution>;
+  listPartialPayments(ctx: TenantContext, invoiceId: string): Promise<PartialPaymentRecord[]>;
+}
+
+export interface PartialPaymentExecution {
+  plan: ReturnType<typeof createPartialPaymentPlan>;
+  executed: boolean;
+  outstanding: number;
+  paymentId?: string;
 }
 
 export class InMemoryInvoiceRepository implements InvoiceRepository {
@@ -80,6 +90,7 @@ export class InMemoryInvoiceRepository implements InvoiceRepository {
   private readonly goodsReceipts: GoodsReceiptRecord[] = [];
   private readonly periods = new Map<string, AccountingPeriodRecord>();
   private readonly creditMemos = new Map<string, CreditMemoRecord>();
+  private readonly partialPaymentRecords: PartialPaymentRecord[] = [];
 
   async createInvoice(ctx: TenantContext, input: CreateInvoiceInput) {
     const id = crypto.randomUUID();
@@ -257,6 +268,32 @@ export class InMemoryInvoiceRepository implements InvoiceRepository {
       this.creditMemos.set(memo.id, { ...memo, amount: remaining, status: remaining <= 0 ? "applied" : "available" });
     }
     return result;
+  }
+
+  async listPartialPayments(ctx: TenantContext, invoiceId: string) {
+    return this.partialPaymentRecords.filter((payment) => payment.tenantId === ctx.tenantId && payment.invoiceId === invoiceId);
+  }
+
+  async executePartialPayment(ctx: TenantContext, invoiceId: string, requestedAmount: number): Promise<PartialPaymentExecution> {
+    const invoice = await this.getInvoice(ctx, invoiceId);
+    if (!invoice) throw new Error("Invoice not found");
+    const paidSoFar = (await this.listPartialPayments(ctx, invoiceId)).reduce((sum, payment) => sum + payment.amount, 0);
+    const outstanding = roundMoney(invoice.total - paidSoFar);
+    const plan = createPartialPaymentPlan({ invoice: { ...toAccountingInvoice(invoice), total: outstanding }, requestedAmount });
+    if (plan.findings.some((finding) => finding.severity === "error")) {
+      return { plan, executed: false, outstanding };
+    }
+    const payment: PartialPaymentRecord = {
+      id: crypto.randomUUID(),
+      tenantId: ctx.tenantId,
+      invoiceId,
+      amount: plan.paymentAmount,
+      currency: invoice.currency,
+      status: "paid",
+      createdAt: now(),
+    };
+    this.partialPaymentRecords.push(payment);
+    return { plan, executed: true, outstanding: roundMoney(outstanding - plan.paymentAmount), paymentId: payment.id };
   }
 
   async addEvent(_ctx: TenantContext, event: Omit<AgentEvent, "id" | "createdAt">) {

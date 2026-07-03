@@ -260,6 +260,22 @@ export const createCreditMemoSchema = z.object({
 });
 export type CreateCreditMemoInput = z.infer<typeof createCreditMemoSchema>;
 
+export const partialPaymentRecordSchema = z.object({
+  id: uuidSchema,
+  tenantId: uuidSchema,
+  invoiceId: uuidSchema,
+  amount: z.number().nonnegative(),
+  currency: z.string().length(3),
+  status: z.string(),
+  createdAt: z.string(),
+});
+export type PartialPaymentRecord = z.infer<typeof partialPaymentRecordSchema>;
+
+export const executePartialPaymentSchema = z.object({
+  requestedAmount: z.number().positive(),
+});
+export type ExecutePartialPaymentInput = z.infer<typeof executePartialPaymentSchema>;
+
 export const transitionSchema = z.object({
   from: invoiceStatusSchema,
   to: invoiceStatusSchema,

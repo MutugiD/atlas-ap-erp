@@ -103,7 +103,10 @@ RLS coverage:
   (`POST /v1/invoices/:id/apply-credits`) that records `credit_memo_applications` and reduces/closes memos
   by their applied amount. Covered by fast and live tests.
 
+- Partial-payment execution (`POST /v1/invoices/:id/partial-payments`, `GET .../partial-payments`): persists
+  a `partial_payments` record capped at the outstanding balance and tracks the remaining balance across
+  successive payments. Covered by fast and live tests.
+
 ## Pending
-- Add partial-payment execution/persistence (currently calculation-only).
 - Add debit memos, withholding tax, and multi-currency realized FX journal posting.
 - Add bank statement import format parsers.

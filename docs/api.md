@@ -25,6 +25,8 @@ un-scoped route.
 | POST | `/v1/invoices/:id/reject` | — | Human reject. |
 | POST | `/v1/invoices/:id/three-way-match` | — | Run three-way match against the invoice's persisted PO + goods receipts. |
 | POST | `/v1/invoices/:id/apply-credits` | — | Apply available credit memos for the invoice's vendor; persists applications and updates memo balances. |
+| POST | `/v1/invoices/:id/partial-payments` | `{ requestedAmount }` | Execute a partial payment (capped at the outstanding balance); persists a `partial_payments` record. Returns `{ plan, executed, outstanding, paymentId? }`. |
+| GET | `/v1/invoices/:id/partial-payments` | — | List partial payments for the invoice. |
 | GET | `/v1/exceptions` | — | Invoices in `exception` status. |
 | POST | `/v1/webhooks/email-inbound` | `{ objectKey?, vendorName?, invoiceNumber?, total?, currency? }` | Ingest an invoice from an inbound email (202). |
 

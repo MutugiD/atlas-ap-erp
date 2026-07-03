@@ -139,6 +139,28 @@ describeLive("Atlas AP live Postgres persistence", () => {
     await appPool.end();
   });
 
+  test("partial payments persist and reduce the outstanding balance (RLS-scoped)", async () => {
+    const appPool = await freshSchema();
+    const repo = new PostgresInvoiceRepository({ pool: appPool });
+
+    const { invoice } = await repo.createInvoice(ctxA, { invoiceNumber: "PP-L", total: 1000, currency: "USD" });
+    await repo.updateInvoice(ctxA, { ...invoice, status: "queued_for_payment" });
+
+    const first = await repo.executePartialPayment(ctxA, invoice.id, 400);
+    expect(first.executed).toBe(true);
+    expect(first.outstanding).toBe(600);
+
+    expect(await repo.listPartialPayments(ctxB, invoice.id)).toHaveLength(0); // RLS
+    expect(await repo.listPartialPayments(ctxA, invoice.id)).toHaveLength(1);
+    expect(await scalar(appPool, tenantA, "select count(*)::int from partial_payments")).toBe(1);
+
+    const second = await repo.executePartialPayment(ctxA, invoice.id, 700);
+    expect(second.plan.paymentAmount).toBe(600);
+    expect(second.outstanding).toBe(0);
+
+    await appPool.end();
+  });
+
   test("posting transition persists a balanced invoice_posting journal", async () => {
     const appPool = await freshSchema();
     const repo = new PostgresInvoiceRepository({ pool: appPool });
@@ -162,8 +184,8 @@ async function freshSchema(): Promise<Pool> {
   await owner.query(`
     drop table if exists reconciliations, bank_transactions, payments, payment_runs,
       gl_journal_lines, gl_journal_entries, goods_receipts, accounting_periods,
-      credit_memo_applications, credit_memos, agent_events, invoices,
-      purchase_orders, vendors, tenants cascade;
+      credit_memo_applications, credit_memos, partial_payments, agent_events,
+      invoices, purchase_orders, vendors, tenants cascade;
     drop role if exists app_user;
   `);
   for (const m of [
@@ -173,6 +195,7 @@ async function freshSchema(): Promise<Pool> {
     "0003_po_goods_receipts",
     "0004_accounting_periods",
     "0005_credit_memos",
+    "0006_partial_payments",
   ]) {
     await owner.query(readFileSync(`packages/db/migrations/${m}.sql`, "utf8"));
   }
