@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { computeProfitability, withTrend, type ProfitabilityInput } from "@atlas/profitability";
+import { computeProfitability, summarize, withTrend, type ProfitabilityInput } from "@atlas/profitability";
 
 const inputs: ProfitabilityInput[] = [
   { account: "Acme", serviceLine: "SEO", feeRevenue: 1000, laborHours: 10, laborCostRate: 30, mediaSpend: 500, mediaMarkupRate: 0.2 },
@@ -67,5 +67,19 @@ describe("Profitability engine", () => {
 
     const beta = trend.byAccount.find((r) => r.key === "Beta")!;
     expect(beta.trend).toBe("new"); // Beta not present in the prior report
+  });
+
+  test("summarizes a report into an executive summary", () => {
+    const report = computeProfitability(inputs, config);
+    const summary = summarize(report);
+    expect(summary.total.netMargin).toBe(1700);
+    expect(summary.accountStatusCounts).toEqual({ green: 2, yellow: 0, red: 0 });
+    expect(summary.serviceLineStatusCounts).toEqual({ green: 1, yellow: 0, red: 1 }); // SEO green, Ads red
+    expect(summary.bestAccount?.key).toBe("Beta"); // 1008 net margin
+    expect(summary.worstAccount?.key).toBe("Acme"); // 692 net margin
+
+    const prior = computeProfitability([{ account: "Acme", serviceLine: "SEO", feeRevenue: 5000, laborHours: 1, laborCostRate: 10, mediaSpend: 0 }], config);
+    const withMovers = summarize(report, withTrend(report, prior));
+    expect(withMovers.biggestDrop?.key).toBe("Acme"); // fell vs the inflated prior
   });
 });

@@ -19,6 +19,17 @@ netMargin      = deliveryMargin - overhead
 `computeProfitability(inputs, config)` returns `{ slices, byAccount, byServiceLine, total }`, each a full margin
 set plus `grossMarginPct`, `netMarginPct`, and a RAG `status`. `withTrend(current, prior)` attaches
 month-over-month `netMarginDelta` and a `trend` (`up|down|flat|new`) to the account and service-line rollups.
+`summarize(report, trend?)` rolls a report into an executive summary (totals, RAG status counts, best/worst
+account, biggest MoM gain/drop).
+
+## Persistence & API
+
+- Inputs (`profitability_inputs`) are recorded per period × account × service line via
+  `POST /v1/profitability/inputs`; `POST /v1/profitability/compute` runs the engine over a period (with
+  optional `priorPeriod` trend).
+- `POST /v1/profitability/reports` generates and **persists** a report artifact (executive summary + full
+  detail) — the "monthly report package"; `GET /v1/profitability/reports[/:id]` retrieves them. Auto-generation
+  at accounting-period close is a documented follow-up (`docs/roadmap.md`).
 
 ## Configuration (defaults, all overridable)
 

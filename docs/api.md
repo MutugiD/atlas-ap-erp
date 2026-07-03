@@ -83,6 +83,9 @@ writes no journal.
 | POST | `/v1/profitability/inputs` | `{ period, account, serviceLine, feeRevenue?, laborHours?, laborCostRate?, mediaSpend?, mediaMarkupRate? }` | Record a per-period input row (account × service line). |
 | GET | `/v1/profitability/inputs` | `?period=YYYY-MM` | List inputs for a period. |
 | POST | `/v1/profitability/compute` | `{ period, priorPeriod?, overheadPool, overheadBasis?, greenAtOrAbove?, yellowAtOrAbove? }` | Run the `@atlas/profitability` engine over the period's inputs; returns `{ report, trend }` (trend present when `priorPeriod` is given). See `docs/profitability.md`. |
+| POST | `/v1/profitability/reports` | same body as `/compute` | Generate + **persist** a report artifact (executive summary + full detail) for the period. |
+| GET | `/v1/profitability/reports` | — | List persisted report artifacts. |
+| GET | `/v1/profitability/reports/:id` | — | Fetch one report artifact (summary + detail). |
 
 ## Payments, reconciliation & accounting calculators
 

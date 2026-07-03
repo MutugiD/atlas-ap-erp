@@ -16,6 +16,7 @@ import {
   type PartialPaymentRecord,
   type ProfitabilityComputeInput,
   type ProfitabilityInputRecord,
+  type ProfitabilityReportRecord,
   type PurchaseOrder,
   type TenantContext,
   type UpdateVendorInput,
@@ -24,6 +25,7 @@ import {
 import type { AgentRepository } from "@atlas/agents";
 import {
   computeProfitability as computeProfitabilityReport,
+  summarize,
   withTrend,
   type ProfitabilityReport,
   type ReportWithTrend,
@@ -99,6 +101,9 @@ export interface InvoiceRepository extends AgentRepository {
   createProfitabilityInput(ctx: TenantContext, input: CreateProfitabilityInput): Promise<ProfitabilityInputRecord>;
   listProfitabilityInputs(ctx: TenantContext, period: string): Promise<ProfitabilityInputRecord[]>;
   profitabilityReport(ctx: TenantContext, params: ProfitabilityComputeInput): Promise<{ report: ProfitabilityReport; trend: ReportWithTrend | null }>;
+  generateProfitabilityReport(ctx: TenantContext, params: ProfitabilityComputeInput): Promise<ProfitabilityReportRecord>;
+  listProfitabilityReports(ctx: TenantContext): Promise<ProfitabilityReportRecord[]>;
+  getProfitabilityReport(ctx: TenantContext, id: string): Promise<ProfitabilityReportRecord | undefined>;
 }
 
 export interface PartialPaymentExecution {
@@ -120,6 +125,7 @@ export class InMemoryInvoiceRepository implements InvoiceRepository {
   private readonly partialPaymentRecords: PartialPaymentRecord[] = [];
   private readonly debitMemos = new Map<string, DebitMemoRecord>();
   private readonly profitabilityInputs: ProfitabilityInputRecord[] = [];
+  private readonly profitabilityReports: ProfitabilityReportRecord[] = [];
 
   async createInvoice(ctx: TenantContext, input: CreateInvoiceInput) {
     const id = crypto.randomUUID();
@@ -355,6 +361,29 @@ export class InMemoryInvoiceRepository implements InvoiceRepository {
       trend = withTrend(report, prior);
     }
     return { report, trend };
+  }
+
+  async generateProfitabilityReport(ctx: TenantContext, params: ProfitabilityComputeInput) {
+    const { report, trend } = await this.profitabilityReport(ctx, params);
+    const record: ProfitabilityReportRecord = {
+      id: crypto.randomUUID(),
+      tenantId: ctx.tenantId,
+      period: params.period,
+      priorPeriod: params.priorPeriod,
+      summary: summarize(report, trend ?? undefined),
+      detail: { report, trend },
+      generatedAt: now(),
+    };
+    this.profitabilityReports.push(record);
+    return record;
+  }
+
+  async listProfitabilityReports(ctx: TenantContext) {
+    return this.profitabilityReports.filter((record) => record.tenantId === ctx.tenantId);
+  }
+
+  async getProfitabilityReport(ctx: TenantContext, id: string) {
+    return this.profitabilityReports.find((record) => record.tenantId === ctx.tenantId && record.id === id);
   }
 
   async addEvent(_ctx: TenantContext, event: Omit<AgentEvent, "id" | "createdAt">) {

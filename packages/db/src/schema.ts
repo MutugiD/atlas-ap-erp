@@ -115,6 +115,20 @@ export const accountingPeriods = pgTable(
   (t) => [index("accounting_periods_tenant_idx").on(t.tenantId), tenantPolicy(t)],
 ).enableRLS();
 
+export const profitabilityReports = pgTable(
+  "profitability_reports",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    period: text("period").notNull(),
+    priorPeriod: text("prior_period"),
+    summary: jsonb("summary").notNull(),
+    detail: jsonb("detail").notNull(),
+    generatedAt: timestamp("generated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("profitability_reports_tenant_period_idx").on(t.tenantId, t.period), tenantPolicy(t)],
+).enableRLS();
+
 export const agentEvents = pgTable(
   "agent_events",
   {

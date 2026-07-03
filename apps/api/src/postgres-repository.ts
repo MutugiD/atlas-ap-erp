@@ -16,12 +16,13 @@ import {
   type PartialPaymentRecord,
   type ProfitabilityComputeInput,
   type ProfitabilityInputRecord,
+  type ProfitabilityReportRecord,
   type PurchaseOrder,
   type TenantContext,
   type UpdateVendorInput,
   type Vendor,
 } from "@atlas/contracts";
-import { computeProfitability as computeProfitabilityReport, withTrend, type ReportWithTrend } from "@atlas/profitability";
+import { computeProfitability as computeProfitabilityReport, summarize, withTrend, type ReportWithTrend } from "@atlas/profitability";
 import {
   applyCreditMemos,
   buildApAging,
@@ -513,6 +514,32 @@ export class PostgresInvoiceRepository implements InvoiceRepository {
     return { report, trend };
   }
 
+  async generateProfitabilityReport(ctx: TenantContext, params: ProfitabilityComputeInput) {
+    const { report, trend } = await this.profitabilityReport(ctx, params);
+    const summary = summarize(report, trend ?? undefined);
+    return this.tx(ctx.tenantId, async (client) => {
+      const result = await client.query(
+        "insert into profitability_reports (tenant_id, period, prior_period, summary, detail) values ($1,$2,$3,$4::jsonb,$5::jsonb) returning *",
+        [ctx.tenantId, params.period, params.priorPeriod ?? null, JSON.stringify(summary), JSON.stringify({ report, trend })],
+      );
+      return rowToProfitabilityReport(result.rows[0]);
+    });
+  }
+
+  async listProfitabilityReports(ctx: TenantContext) {
+    return this.tx(ctx.tenantId, async (client) => {
+      const result = await client.query("select * from profitability_reports where tenant_id = $1 order by generated_at desc", [ctx.tenantId]);
+      return result.rows.map(rowToProfitabilityReport);
+    });
+  }
+
+  async getProfitabilityReport(ctx: TenantContext, id: string) {
+    return this.tx(ctx.tenantId, async (client) => {
+      const result = await client.query("select * from profitability_reports where tenant_id = $1 and id = $2 limit 1", [ctx.tenantId, id]);
+      return result.rows[0] ? rowToProfitabilityReport(result.rows[0]) : undefined;
+    });
+  }
+
   async executePartialPayment(ctx: TenantContext, invoiceId: string, requestedAmount: number): Promise<PartialPaymentExecution> {
     return this.tx(ctx.tenantId, async (client) => {
       const invoiceResult = await client.query("select * from invoices where tenant_id = $1 and id = $2 limit 1", [ctx.tenantId, invoiceId]);
@@ -675,6 +702,18 @@ function toDateString(value: unknown): string {
     return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
   }
   return String(value);
+}
+
+function rowToProfitabilityReport(row: Record<string, unknown>): ProfitabilityReportRecord {
+  return {
+    id: String(row.id),
+    tenantId: String(row.tenant_id),
+    period: String(row.period),
+    priorPeriod: row.prior_period ? String(row.prior_period) : undefined,
+    summary: typeof row.summary === "string" ? JSON.parse(row.summary) : row.summary,
+    detail: typeof row.detail === "string" ? JSON.parse(row.detail) : row.detail,
+    generatedAt: new Date(row.generated_at as string).toISOString(),
+  };
 }
 
 function rowToProfitabilityInput(row: Record<string, unknown>): ProfitabilityInputRecord {

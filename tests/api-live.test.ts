@@ -280,6 +280,25 @@ describeLive("Atlas AP live Postgres persistence", () => {
     await appPool.end();
   });
 
+  test("generates and persists a profitability report artifact (RLS-scoped)", async () => {
+    const appPool = await freshSchema();
+    const repo = new PostgresInvoiceRepository({ pool: appPool });
+
+    await repo.createProfitabilityInput(ctxA, { period: "2026-06", account: "Acme", serviceLine: "SEO", feeRevenue: 1000, laborHours: 10, laborCostRate: 30, mediaSpend: 500, mediaMarkupRate: 0.2 });
+    await repo.createProfitabilityInput(ctxA, { period: "2026-06", account: "Beta", serviceLine: "SEO", feeRevenue: 2000, laborHours: 20, laborCostRate: 40, mediaSpend: 0, mediaMarkupRate: 0 });
+
+    const record = await repo.generateProfitabilityReport(ctxA, { period: "2026-06", overheadPool: 300, overheadBasis: "labor" });
+    expect((record.summary as { total: { revenue: number } }).total.revenue).toBe(3600);
+
+    expect(await repo.listProfitabilityReports(ctxB)).toHaveLength(0); // RLS
+    expect(await repo.listProfitabilityReports(ctxA)).toHaveLength(1);
+    const fetched = await repo.getProfitabilityReport(ctxA, record.id);
+    expect(fetched?.id).toBe(record.id);
+    expect(await scalar(appPool, tenantA, "select count(*)::int from profitability_reports")).toBe(1);
+
+    await appPool.end();
+  });
+
   test("posting transition persists a balanced invoice_posting journal", async () => {
     const appPool = await freshSchema();
     const repo = new PostgresInvoiceRepository({ pool: appPool });
@@ -304,7 +323,7 @@ async function freshSchema(): Promise<Pool> {
     drop table if exists reconciliations, bank_transactions, payments, payment_runs,
       gl_journal_lines, gl_journal_entries, goods_receipts, accounting_periods,
       credit_memo_applications, credit_memos, debit_memos, partial_payments,
-      profitability_inputs, agent_events, invoices, purchase_orders, vendors, tenants cascade;
+      profitability_reports, profitability_inputs, agent_events, invoices, purchase_orders, vendors, tenants cascade;
     drop role if exists app_user;
   `);
   for (const m of [
@@ -318,6 +337,7 @@ async function freshSchema(): Promise<Pool> {
     "0007_vendor_withholding_tax",
     "0008_debit_memos",
     "0009_profitability",
+    "0010_profitability_reports",
   ]) {
     await owner.query(readFileSync(`packages/db/migrations/${m}.sql`, "utf8"));
   }
