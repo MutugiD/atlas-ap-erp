@@ -53,6 +53,12 @@ bun.cmd run dev:web
 bun.cmd run dev:support
 ```
 
+For local UI testing **no database is required** — with `DATABASE_URL` unset the API uses the in-memory
+repository. Start `dev:api` (http://localhost:3001) and `dev:web` (http://localhost:3000), then open
+`/profitability`: add a few inputs for a period, click **Generate report**, and the RAG scorecard (by account
+and service line, with month-over-month trend) renders. The web app talks to the API at `API_BASE_URL`
+(default `http://localhost:3001`).
+
 Default tenant headers for API calls:
 
 - `x-tenant-id`: tenant UUID

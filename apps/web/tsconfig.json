@@ -18,6 +18,9 @@
     "paths": {
       "@atlas/contracts": [
         "packages/contracts/src/index.ts"
+      ],
+      "@atlas/profitability": [
+        "packages/profitability/src/index.ts"
       ]
     },
     "resolveJsonModule": true,
