@@ -29,7 +29,7 @@
     "@aws-sdk/client-secrets-manager": "^3.699.0",
     "@aws-sdk/s3-request-presigner": "^3.699.0",
     "@fastify/helmet": "^13.0.1",
-    "@fastify/rate-limit": "^10.2.1",
+    "@fastify/rate-limit": "^11.1.0",
     "aws-cdk-lib": "^2.171.1",
     "bullmq": "^5.31.0",
     "constructs": "^10.4.2",
