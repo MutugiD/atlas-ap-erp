@@ -42,6 +42,12 @@ v1.post("/invoices/:id/posting-preview", async (c) => {
   return c.json({ journal: await repository.previewPosting(c.get("tenant"), c.req.param("id")) });
 });
 
+// Data-entry controls: is this a legit invoice? (vendor in master, arithmetic /
+// line extensions, subtotal+tax=total, duplicate key, open period).
+v1.post("/invoices/:id/validate", async (c) => {
+  return c.json({ validation: await repository.validateDataEntry(c.get("tenant"), c.req.param("id")) });
+});
+
 v1.get("/invoices/:id/events", async (c) => {
   return c.json({ events: await repository.listEvents(c.get("tenant"), c.req.param("id")) });
 });
