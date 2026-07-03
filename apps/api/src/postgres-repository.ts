@@ -1,4 +1,12 @@
-import { type AgentEvent, type CreateInvoiceInput, type Invoice, type TenantContext } from "@atlas/contracts";
+import {
+  type AgentEvent,
+  type CreateInvoiceInput,
+  type CreateVendorInput,
+  type Invoice,
+  type TenantContext,
+  type UpdateVendorInput,
+  type Vendor,
+} from "@atlas/contracts";
 import {
   applyCreditMemos,
   buildApAging,
@@ -14,7 +22,7 @@ import {
 } from "@atlas/accounting";
 import { Pool, type PoolClient } from "pg";
 import type { InvoiceRepository } from "./repository";
-import { toAccountingInvoice, toVendorMaster } from "./mappers";
+import { toAccountingInvoice, toVendorMaster, vendorMastersForInvoices } from "./mappers";
 
 // Postgres-backed AP repository. Mirrors the transaction + RLS pattern used by
 // PostgresNativeStore in the memory engine: every unit of work runs inside a
@@ -56,18 +64,27 @@ export class PostgresInvoiceRepository implements InvoiceRepository {
   async createInvoice(ctx: TenantContext, input: CreateInvoiceInput) {
     const id = crypto.randomUUID();
     const invoice = await this.tx(ctx.tenantId, async (client) => {
-      // po_id has a FK to purchase_orders; PO CRUD is not implemented yet, so
-      // only persist a poId that actually resolves to a row for this tenant.
+      // po_id / vendor_id have FKs; PO CRUD is not implemented yet and a vendor
+      // may not exist, so only persist ids that actually resolve for this tenant.
       let poId: string | null = null;
       if (input.poId) {
         const po = await client.query("select id from purchase_orders where id = $1 and tenant_id = $2", [input.poId, ctx.tenantId]);
         poId = po.rowCount ? input.poId : null;
       }
+      let vendorId: string | null = null;
+      let vendorName: string | null = input.vendorName ?? null;
+      if (input.vendorId) {
+        const vendor = await client.query("select id, name from vendors where id = $1 and tenant_id = $2", [input.vendorId, ctx.tenantId]);
+        if (vendor.rowCount) {
+          vendorId = input.vendorId;
+          vendorName = vendorName ?? String(vendor.rows[0].name);
+        }
+      }
       const result = await client.query(
-        `insert into invoices (id, tenant_id, po_id, source_object_key, invoice_number, vendor_name, status, total, currency)
-         values ($1,$2,$3,$4,$5,$6,'received',$7,$8)
+        `insert into invoices (id, tenant_id, vendor_id, po_id, source_object_key, invoice_number, vendor_name, status, total, currency)
+         values ($1,$2,$3,$4,$5,$6,$7,'received',$8,$9)
          returning *`,
-        [id, ctx.tenantId, poId, input.sourceObjectKey ?? null, input.invoiceNumber ?? null, input.vendorName ?? null, String(input.total), input.currency],
+        [id, ctx.tenantId, vendorId, poId, input.sourceObjectKey ?? null, input.invoiceNumber ?? null, vendorName, String(input.total), input.currency],
       );
       return rowToInvoice(result.rows[0]);
     });
@@ -181,22 +198,65 @@ export class PostgresInvoiceRepository implements InvoiceRepository {
     return this.tx(ctx.tenantId, async (client) => {
       const invoicesResult = await client.query("select * from invoices where tenant_id = $1", [ctx.tenantId]);
       const invoices = invoicesResult.rows.map(rowToInvoice).map(toAccountingInvoice);
-      const vendors = invoices.map((invoice) => toVendorMaster({ vendorId: invoice.vendorId, vendorName: invoice.vendorName, currency: invoice.currency }));
+      const vendorRows = await client.query("select * from vendors where tenant_id = $1", [ctx.tenantId]);
+      const vendorRecords = vendorRows.rows.map(rowToVendor);
+      const vendors = vendorMastersForInvoices(invoices, vendorRecords);
       const run = createPaymentRun({ tenantId: ctx.tenantId, invoices, vendors, scheduledDate });
 
+      const realVendorIds = new Set(vendorRecords.map((vendor) => vendor.id));
       await client.query("insert into payment_runs (id, tenant_id, scheduled_date, status) values ($1,$2,$3,'created')", [run.id, ctx.tenantId, scheduledDate]);
       for (const payment of run.payments) {
-        // vendor_id is a uuid FK; vendor master CRUD is not implemented yet, so
-        // it is left null until real vendor rows exist.
+        // vendor_id is a uuid FK; persist it only when it resolves to a real vendor.
+        const vendorId = realVendorIds.has(payment.vendorId) ? payment.vendorId : null;
         await client.query(
-          "insert into payments (id, tenant_id, payment_run_id, invoice_id, vendor_id, amount, currency, status) values ($1,$2,$3,$4,null,$5,$6,$7)",
-          [payment.id, ctx.tenantId, run.id, payment.invoiceId, String(payment.amount), payment.currency, payment.status],
+          "insert into payments (id, tenant_id, payment_run_id, invoice_id, vendor_id, amount, currency, status) values ($1,$2,$3,$4,$5,$6,$7,$8)",
+          [payment.id, ctx.tenantId, run.id, payment.invoiceId, vendorId, String(payment.amount), payment.currency, payment.status],
         );
       }
       if (run.payments.length > 0) {
         await persistJournal(client, ctx.tenantId, run.journal);
       }
       return run;
+    });
+  }
+
+  async createVendor(ctx: TenantContext, input: CreateVendorInput) {
+    return this.tx(ctx.tenantId, async (client) => {
+      const result = await client.query(
+        `insert into vendors (tenant_id, name, tax_id, active, hold_payments, payment_terms_days, default_expense_account, currency)
+         values ($1,$2,$3,$4,$5,$6,$7,$8) returning *`,
+        [ctx.tenantId, input.name, input.taxId ?? null, input.active, input.holdPayments, input.paymentTermsDays, input.defaultExpenseAccount, input.currency],
+      );
+      return rowToVendor(result.rows[0]);
+    });
+  }
+
+  async listVendors(ctx: TenantContext) {
+    return this.tx(ctx.tenantId, async (client) => {
+      const result = await client.query("select * from vendors where tenant_id = $1 order by created_at asc", [ctx.tenantId]);
+      return result.rows.map(rowToVendor);
+    });
+  }
+
+  async getVendor(ctx: TenantContext, id: string) {
+    return this.tx(ctx.tenantId, async (client) => {
+      const result = await client.query("select * from vendors where tenant_id = $1 and id = $2 limit 1", [ctx.tenantId, id]);
+      return result.rows[0] ? rowToVendor(result.rows[0]) : undefined;
+    });
+  }
+
+  async updateVendor(ctx: TenantContext, id: string, patch: UpdateVendorInput) {
+    return this.tx(ctx.tenantId, async (client) => {
+      const existing = await client.query("select * from vendors where tenant_id = $1 and id = $2 limit 1", [ctx.tenantId, id]);
+      if (!existing.rowCount) throw new Error("Vendor not found");
+      const current = rowToVendor(existing.rows[0]);
+      const next = { ...current, ...patch };
+      const result = await client.query(
+        `update vendors set name=$3, tax_id=$4, active=$5, hold_payments=$6, payment_terms_days=$7, default_expense_account=$8, currency=$9
+         where tenant_id=$1 and id=$2 returning *`,
+        [ctx.tenantId, id, next.name, next.taxId ?? null, next.active, next.holdPayments, next.paymentTermsDays, next.defaultExpenseAccount, next.currency],
+      );
+      return rowToVendor(result.rows[0]);
     });
   }
 
@@ -309,6 +369,21 @@ function rowToEvent(row: Record<string, unknown>): AgentEvent {
     output: typeof row.output === "string" ? JSON.parse(row.output) : row.output,
     tokens: Number(row.tokens),
     latencyMs: Number(row.latency_ms),
+    createdAt: new Date(row.created_at as string).toISOString(),
+  };
+}
+
+function rowToVendor(row: Record<string, unknown>): Vendor {
+  return {
+    id: String(row.id),
+    tenantId: String(row.tenant_id),
+    name: String(row.name),
+    taxId: row.tax_id ? String(row.tax_id) : undefined,
+    active: Boolean(row.active),
+    holdPayments: Boolean(row.hold_payments),
+    paymentTermsDays: Number(row.payment_terms_days),
+    defaultExpenseAccount: String(row.default_expense_account),
+    currency: String(row.currency),
     createdAt: new Date(row.created_at as string).toISOString(),
   };
 }

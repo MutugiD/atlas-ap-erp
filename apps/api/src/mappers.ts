@@ -1,4 +1,4 @@
-import { type Invoice } from "@atlas/contracts";
+import { type Invoice, type Vendor } from "@atlas/contracts";
 import { type AccountingInvoice, type VendorMaster } from "@atlas/accounting";
 
 // Shared mapping from the persisted Invoice shape to the accounting-engine
@@ -42,4 +42,34 @@ export function toAccountingStatus(status: Invoice["status"]): AccountingInvoice
   if (status === "rejected" || status === "coded") return "exception";
   if (status === "extracted" || status === "received") return "received";
   return status;
+}
+
+// A persisted vendor record maps directly onto the accounting engine's VendorMaster.
+export function vendorToMaster(vendor: Vendor): VendorMaster {
+  return {
+    id: vendor.id,
+    name: vendor.name,
+    taxId: vendor.taxId,
+    active: vendor.active,
+    paymentTermsDays: vendor.paymentTermsDays,
+    defaultExpenseAccount: vendor.defaultExpenseAccount,
+    currency: vendor.currency,
+    holdPayments: vendor.holdPayments,
+  };
+}
+
+// Build the VendorMaster list a payment run needs: use the real vendor master
+// where the invoice's vendorId resolves to a persisted vendor, otherwise fall
+// back to a synthetic stub (invoices not yet linked to a vendor record).
+export function vendorMastersForInvoices(invoices: AccountingInvoice[], vendors: Vendor[]): VendorMaster[] {
+  const byId = new Map(vendors.map((vendor) => [vendor.id, vendorToMaster(vendor)]));
+  const result = new Map<string, VendorMaster>();
+  for (const invoice of invoices) {
+    if (result.has(invoice.vendorId)) continue;
+    result.set(
+      invoice.vendorId,
+      byId.get(invoice.vendorId) ?? toVendorMaster({ vendorId: invoice.vendorId, vendorName: invoice.vendorName, currency: invoice.currency }),
+    );
+  }
+  return [...result.values()];
 }

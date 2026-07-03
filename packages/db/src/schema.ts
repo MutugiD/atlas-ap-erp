@@ -1,6 +1,8 @@
 import { sql } from "drizzle-orm";
 import {
+  boolean,
   index,
+  integer,
   jsonb,
   numeric,
   pgPolicy,
@@ -37,6 +39,12 @@ export const vendors = pgTable(
     tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
     name: text("name").notNull(),
     taxId: text("tax_id"),
+    active: boolean("active").notNull().default(true),
+    holdPayments: boolean("hold_payments").notNull().default(false),
+    paymentTermsDays: integer("payment_terms_days").notNull().default(30),
+    defaultExpenseAccount: text("default_expense_account").notNull().default("6100"),
+    currency: text("currency").notNull().default("USD"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("vendors_tenant_idx").on(t.tenantId), tenantPolicy(t)],
 ).enableRLS();

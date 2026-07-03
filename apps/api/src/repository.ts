@@ -1,4 +1,12 @@
-import { type AgentEvent, type CreateInvoiceInput, type Invoice, type TenantContext } from "@atlas/contracts";
+import {
+  type AgentEvent,
+  type CreateInvoiceInput,
+  type CreateVendorInput,
+  type Invoice,
+  type TenantContext,
+  type UpdateVendorInput,
+  type Vendor,
+} from "@atlas/contracts";
 import type { AgentRepository } from "@atlas/agents";
 import {
   applyCreditMemos,
@@ -14,11 +22,12 @@ import {
   type Payment,
   type PaymentRun,
 } from "@atlas/accounting";
-import { toAccountingInvoice, toVendorMaster } from "./mappers";
+import { toAccountingInvoice, toVendorMaster, vendorMastersForInvoices } from "./mappers";
 import { PostgresInvoiceRepository } from "./postgres-repository";
 
 const now = () => new Date().toISOString();
 
+// The AP repository: invoices, events, accounting operations, and vendor master.
 export interface InvoiceRepository extends AgentRepository {
   createInvoice(ctx: TenantContext, input: CreateInvoiceInput): Promise<{ invoice: Invoice; uploadUrl: string }>;
   listInvoices(ctx: TenantContext): Promise<Invoice[]>;
@@ -33,20 +42,28 @@ export interface InvoiceRepository extends AgentRepository {
   planPartialPayment(ctx: TenantContext, invoiceId: string, requestedAmount: number): Promise<ReturnType<typeof createPartialPaymentPlan>>;
   aging(ctx: TenantContext, asOfDate: string): Promise<ReturnType<typeof buildApAging>>;
   realizeFx(ctx: TenantContext, input: { invoiceId: string; functionalCurrency: string; invoiceFxRate: number; paymentFxRate: number }): Promise<ReturnType<typeof calculateRealizedFx>>;
+  createVendor(ctx: TenantContext, input: CreateVendorInput): Promise<Vendor>;
+  listVendors(ctx: TenantContext): Promise<Vendor[]>;
+  getVendor(ctx: TenantContext, id: string): Promise<Vendor | undefined>;
+  updateVendor(ctx: TenantContext, id: string, patch: UpdateVendorInput): Promise<Vendor>;
 }
 
 export class InMemoryInvoiceRepository implements InvoiceRepository {
   private readonly invoices = new Map<string, Invoice>();
   private readonly events: AgentEvent[] = [];
   private readonly payments = new Map<string, Payment[]>();
+  private readonly vendors = new Map<string, Vendor>();
 
   async createInvoice(ctx: TenantContext, input: CreateInvoiceInput) {
     const id = crypto.randomUUID();
+    // Only link a vendorId that resolves to a vendor for this tenant.
+    const vendor = input.vendorId ? await this.getVendor(ctx, input.vendorId) : undefined;
     const invoice: Invoice = {
       id,
       tenantId: ctx.tenantId,
       sourceObjectKey: input.sourceObjectKey,
-      vendorName: input.vendorName,
+      vendorName: input.vendorName ?? vendor?.name,
+      vendorId: vendor?.id,
       invoiceNumber: input.invoiceNumber,
       poId: input.poId,
       status: "received",
@@ -57,6 +74,29 @@ export class InMemoryInvoiceRepository implements InvoiceRepository {
     };
     this.invoices.set(id, invoice);
     return { invoice, uploadUrl: `s3://local-atlas-ap/${ctx.tenantId}/${id}.pdf` };
+  }
+
+  async createVendor(ctx: TenantContext, input: CreateVendorInput) {
+    const vendor: Vendor = { id: crypto.randomUUID(), tenantId: ctx.tenantId, createdAt: now(), ...input };
+    this.vendors.set(vendor.id, vendor);
+    return vendor;
+  }
+
+  async listVendors(ctx: TenantContext) {
+    return [...this.vendors.values()].filter((vendor) => vendor.tenantId === ctx.tenantId);
+  }
+
+  async getVendor(ctx: TenantContext, id: string) {
+    const vendor = this.vendors.get(id);
+    return vendor?.tenantId === ctx.tenantId ? vendor : undefined;
+  }
+
+  async updateVendor(ctx: TenantContext, id: string, patch: UpdateVendorInput) {
+    const vendor = await this.getVendor(ctx, id);
+    if (!vendor) throw new Error("Vendor not found");
+    const updated: Vendor = { ...vendor, ...patch };
+    this.vendors.set(id, updated);
+    return updated;
   }
 
   async listInvoices(ctx: TenantContext) {
@@ -125,15 +165,7 @@ export class InMemoryInvoiceRepository implements InvoiceRepository {
 
   async createPaymentRun(ctx: TenantContext, scheduledDate: string) {
     const invoices = (await this.listInvoices(ctx)).map(toAccountingInvoice);
-    const vendors = invoices.map((invoice) => ({
-      id: invoice.vendorId,
-      name: invoice.vendorName,
-      taxId: "LOCAL-TAX-ID",
-      active: true,
-      paymentTermsDays: 30,
-      defaultExpenseAccount: "6100",
-      currency: invoice.currency,
-    }));
+    const vendors = vendorMastersForInvoices(invoices, await this.listVendors(ctx));
     const run = createPaymentRun({ tenantId: ctx.tenantId, invoices, vendors, scheduledDate });
     this.payments.set(ctx.tenantId, [...(this.payments.get(ctx.tenantId) ?? []), ...run.payments]);
     return run;

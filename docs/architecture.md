@@ -35,8 +35,9 @@ The API repository is swappable behind the `InvoiceRepository` interface: in-mem
 Postgres-backed (`PostgresInvoiceRepository`) when `DATABASE_URL` is set. The Postgres path runs every unit
 of work inside a transaction that first sets `app.tenant_id`, so row-level security applies, and persists
 invoices, agent events, GL journal entries/lines (posting and payment-run journals), payment runs, payments,
-bank transactions, and reconciliations. Vendor/PO/goods-receipt master data and credit-memo/partial-payment
-execution remain calculation-only pending their own CRUD/workflow layers.
+bank transactions, reconciliations, and the vendor master. Invoices link to a vendor via `vendorId`, and
+payment runs honor the real vendor master (e.g. a payment hold excludes the invoice). PO/goods-receipt master
+data and credit-memo/partial-payment execution remain pending their own CRUD/workflow layers.
 
 ## Deployment
 

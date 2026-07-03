@@ -94,6 +94,54 @@ describe("Hono API", () => {
     expect((await reconciliation.json()).reconciliation.matched).toHaveLength(1);
   });
 
+  test("manages vendor master lifecycle", async () => {
+    const vHeaders = { ...headers, "x-tenant-id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc" };
+    const create = await app.request("/v1/vendors", {
+      method: "POST",
+      headers: vHeaders,
+      body: JSON.stringify({ name: "Acme Supplies", taxId: "KE-123", currency: "USD" }),
+    });
+    expect(create.status).toBe(201);
+    const vendor = (await create.json()).vendor;
+    expect(vendor.active).toBe(true);
+    expect(vendor.holdPayments).toBe(false);
+
+    const list = await app.request("/v1/vendors", { headers: vHeaders });
+    expect((await list.json()).vendors.some((v: { id: string }) => v.id === vendor.id)).toBe(true);
+
+    const patched = await app.request(`/v1/vendors/${vendor.id}`, {
+      method: "PATCH",
+      headers: vHeaders,
+      body: JSON.stringify({ holdPayments: true }),
+    });
+    expect((await patched.json()).vendor.holdPayments).toBe(true);
+  });
+
+  test("payment run honors vendor payment hold", async () => {
+    const dHeaders = { ...headers, "x-tenant-id": "dddddddd-dddd-4ddd-8ddd-dddddddddddd" };
+    const heldVendor = (await (await app.request("/v1/vendors", {
+      method: "POST",
+      headers: dHeaders,
+      body: JSON.stringify({ name: "Held Vendor", currency: "USD", holdPayments: true }),
+    })).json()).vendor;
+
+    const invoice = (await (await app.request("/v1/invoices", {
+      method: "POST",
+      headers: dHeaders,
+      body: JSON.stringify({ invoiceNumber: "HOLD-1", total: 500, currency: "USD", vendorId: heldVendor.id }),
+    })).json()).invoice;
+    expect(invoice.vendorId).toBe(heldVendor.id);
+    await app.request(`/v1/invoices/${invoice.id}/reprocess`, { method: "POST", headers: dHeaders });
+
+    const run = (await (await app.request("/v1/payment-runs", {
+      method: "POST",
+      headers: dHeaders,
+      body: JSON.stringify({ scheduledDate: "2099-12-31" }),
+    })).json()).paymentRun;
+    expect(run.payments.some((p: { invoiceId: string }) => p.invoiceId === invoice.id)).toBe(false);
+    expect(run.excluded.some((e: { invoiceId: string; reason: string }) => e.invoiceId === invoice.id && e.reason === "Vendor payment hold")).toBe(true);
+  });
+
   test("serves accounting credit, partial payment, aging, and FX endpoints", async () => {
     const create = await app.request("/v1/invoices", {
       method: "POST",

@@ -88,10 +88,13 @@ RLS coverage:
 - Persist invoices, agent events, GL journal entries/lines (posting and payment-run journals), payment runs,
   payments, bank transactions, and reconciliations through `PostgresInvoiceRepository` (transactional,
   tenant-scoped RLS), used when `DATABASE_URL` is set. Covered by `tests/api-live.test.ts` (`bun run test:live-api`).
+- Vendor master CRUD (`/v1/vendors`): create/list/get/update with `active`, `hold_payments`,
+  `payment_terms_days`, `default_expense_account`, `currency`. Invoices link to a vendor via `vendorId`, and
+  payment runs use the real vendor master (a payment hold excludes the invoice) instead of a synthetic stub.
 
 ## Pending
 
-- Add vendor master and purchase order CRUD APIs.
+- Add purchase order and goods-receipt CRUD APIs.
 - Add accounting-period close/reopen workflow.
 - Add credit-memo and partial-payment execution/persistence (currently calculation-only).
 - Add debit memos, withholding tax, and multi-currency realized FX journal posting.
