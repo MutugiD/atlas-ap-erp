@@ -1,5 +1,7 @@
 import {
+  type AccountingPeriodRecord,
   type AgentEvent,
+  type CreateAccountingPeriodInput,
   type CreateGoodsReceiptInput,
   type CreateInvoiceInput,
   type CreatePurchaseOrderInput,
@@ -28,6 +30,7 @@ import {
 } from "@atlas/accounting";
 import { Pool, type PoolClient } from "pg";
 import type { InvoiceRepository } from "./repository";
+import { ClosedPeriodError } from "./errors";
 import { toAccountingInvoice, toGoodsReceipt, toPurchaseOrderAccounting, toVendorMaster, vendorMastersForInvoices } from "./mappers";
 
 // Postgres-backed AP repository. Mirrors the transaction + RLS pattern used by
@@ -158,9 +161,15 @@ export class PostgresInvoiceRepository implements InvoiceRepository {
       if (!result.rowCount) throw new Error("Invoice not found");
       const updated = rowToInvoice(result.rows[0]);
       // Persist the balanced posting journal exactly once, at the moment the
-      // invoice actually transitions into 'posted'.
+      // invoice actually transitions into 'posted' — and never into a closed period.
       const wasPosted = prior.rows[0]?.status === "posted";
       if (updated.status === "posted" && !wasPosted) {
+        const postingDate = toAccountingInvoice(updated).postingDate;
+        const period = await client.query(
+          "select id, status from accounting_periods where tenant_id = $1 and starts_on <= $2 and ends_on >= $2 limit 1",
+          [ctx.tenantId, postingDate],
+        );
+        if (period.rows[0]?.status === "closed") throw new ClosedPeriodError(String(period.rows[0].id));
         const journal = buildInvoicePostingJournal({ tenantId: ctx.tenantId, invoice: toAccountingInvoice(updated), vendor: toVendorMaster(updated) });
         await persistJournal(client, ctx.tenantId, journal);
       }
@@ -340,6 +349,34 @@ export class PostgresInvoiceRepository implements InvoiceRepository {
     });
   }
 
+  async createAccountingPeriod(ctx: TenantContext, input: CreateAccountingPeriodInput) {
+    return this.tx(ctx.tenantId, async (client) => {
+      const result = await client.query(
+        "insert into accounting_periods (tenant_id, name, starts_on, ends_on, status) values ($1,$2,$3,$4,'open') returning *",
+        [ctx.tenantId, input.name, input.startsOn, input.endsOn],
+      );
+      return rowToAccountingPeriod(result.rows[0]);
+    });
+  }
+
+  async listAccountingPeriods(ctx: TenantContext) {
+    return this.tx(ctx.tenantId, async (client) => {
+      const result = await client.query("select * from accounting_periods where tenant_id = $1 order by starts_on asc", [ctx.tenantId]);
+      return result.rows.map(rowToAccountingPeriod);
+    });
+  }
+
+  async setPeriodStatus(ctx: TenantContext, id: string, status: "open" | "closed") {
+    return this.tx(ctx.tenantId, async (client) => {
+      const result = await client.query(
+        "update accounting_periods set status = $3 where tenant_id = $1 and id = $2 returning *",
+        [ctx.tenantId, id, status],
+      );
+      if (!result.rowCount) throw new Error("Accounting period not found");
+      return rowToAccountingPeriod(result.rows[0]);
+    });
+  }
+
   async reconcilePayments(ctx: TenantContext, bankTransactions: BankTransaction[]) {
     return this.tx(ctx.tenantId, async (client) => {
       const paymentsResult = await client.query("select * from payments where tenant_id = $1", [ctx.tenantId]);
@@ -464,6 +501,28 @@ function rowToVendor(row: Record<string, unknown>): Vendor {
     paymentTermsDays: Number(row.payment_terms_days),
     defaultExpenseAccount: String(row.default_expense_account),
     currency: String(row.currency),
+    createdAt: new Date(row.created_at as string).toISOString(),
+  };
+}
+
+// node-pg parses a `date` column into a Date at local midnight; format from its
+// local parts so the calendar date is preserved regardless of timezone.
+function toDateString(value: unknown): string {
+  if (typeof value === "string") return value.slice(0, 10);
+  if (value instanceof Date) {
+    return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
+  }
+  return String(value);
+}
+
+function rowToAccountingPeriod(row: Record<string, unknown>): AccountingPeriodRecord {
+  return {
+    id: String(row.id),
+    tenantId: String(row.tenant_id),
+    name: String(row.name),
+    startsOn: toDateString(row.starts_on),
+    endsOn: toDateString(row.ends_on),
+    status: String(row.status) as AccountingPeriodRecord["status"],
     createdAt: new Date(row.created_at as string).toISOString(),
   };
 }

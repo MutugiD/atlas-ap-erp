@@ -1,5 +1,7 @@
 import {
+  type AccountingPeriodRecord,
   type AgentEvent,
+  type CreateAccountingPeriodInput,
   type CreateGoodsReceiptInput,
   type CreateInvoiceInput,
   type CreatePurchaseOrderInput,
@@ -29,6 +31,7 @@ import {
   type PaymentRun,
 } from "@atlas/accounting";
 import { toAccountingInvoice, toGoodsReceipt, toPurchaseOrderAccounting, toVendorMaster, vendorMastersForInvoices } from "./mappers";
+import { ClosedPeriodError } from "./errors";
 import { PostgresInvoiceRepository } from "./postgres-repository";
 
 const now = () => new Date().toISOString();
@@ -58,6 +61,9 @@ export interface InvoiceRepository extends AgentRepository {
   createGoodsReceipt(ctx: TenantContext, input: CreateGoodsReceiptInput): Promise<GoodsReceiptRecord>;
   listGoodsReceipts(ctx: TenantContext, poId: string): Promise<GoodsReceiptRecord[]>;
   matchInvoice(ctx: TenantContext, invoiceId: string): Promise<ReturnType<typeof runThreeWayMatch>>;
+  createAccountingPeriod(ctx: TenantContext, input: CreateAccountingPeriodInput): Promise<AccountingPeriodRecord>;
+  listAccountingPeriods(ctx: TenantContext): Promise<AccountingPeriodRecord[]>;
+  setPeriodStatus(ctx: TenantContext, id: string, status: "open" | "closed"): Promise<AccountingPeriodRecord>;
 }
 
 export class InMemoryInvoiceRepository implements InvoiceRepository {
@@ -67,6 +73,7 @@ export class InMemoryInvoiceRepository implements InvoiceRepository {
   private readonly vendors = new Map<string, Vendor>();
   private readonly purchaseOrders = new Map<string, PurchaseOrder>();
   private readonly goodsReceipts: GoodsReceiptRecord[] = [];
+  private readonly periods = new Map<string, AccountingPeriodRecord>();
 
   async createInvoice(ctx: TenantContext, input: CreateInvoiceInput) {
     const id = crypto.randomUUID();
@@ -187,8 +194,37 @@ export class InMemoryInvoiceRepository implements InvoiceRepository {
 
   async updateInvoice(ctx: TenantContext, invoice: Invoice) {
     if (invoice.tenantId !== ctx.tenantId) throw new Error("Tenant mismatch");
+    const prior = this.invoices.get(invoice.id);
+    if (invoice.status === "posted" && prior?.status !== "posted") {
+      const period = this.periodForDate(ctx, toAccountingInvoice(invoice).postingDate);
+      if (period?.status === "closed") throw new ClosedPeriodError(period.id);
+    }
     this.invoices.set(invoice.id, invoice);
     return invoice;
+  }
+
+  private periodForDate(ctx: TenantContext, date: string) {
+    return [...this.periods.values()].find(
+      (period) => period.tenantId === ctx.tenantId && period.startsOn <= date && date <= period.endsOn,
+    );
+  }
+
+  async createAccountingPeriod(ctx: TenantContext, input: CreateAccountingPeriodInput) {
+    const period: AccountingPeriodRecord = { id: crypto.randomUUID(), tenantId: ctx.tenantId, status: "open", createdAt: now(), ...input };
+    this.periods.set(period.id, period);
+    return period;
+  }
+
+  async listAccountingPeriods(ctx: TenantContext) {
+    return [...this.periods.values()].filter((period) => period.tenantId === ctx.tenantId);
+  }
+
+  async setPeriodStatus(ctx: TenantContext, id: string, status: "open" | "closed") {
+    const period = this.periods.get(id);
+    if (period?.tenantId !== ctx.tenantId) throw new Error("Accounting period not found");
+    const updated: AccountingPeriodRecord = { ...period, status };
+    this.periods.set(id, updated);
+    return updated;
   }
 
   async addEvent(_ctx: TenantContext, event: Omit<AgentEvent, "id" | "createdAt">) {

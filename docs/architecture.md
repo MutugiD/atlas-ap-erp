@@ -38,7 +38,8 @@ invoices, agent events, GL journal entries/lines (posting and payment-run journa
 bank transactions, reconciliations, the vendor master, purchase orders, and goods receipts. Invoices link to
 a vendor via `vendorId`, and payment runs honor the real vendor master (e.g. a payment hold excludes the
 invoice). Purchase orders carry lines and drive a three-way match endpoint against persisted goods receipts.
-Credit-memo/partial-payment execution and the accounting-period workflow remain pending.
+Accounting periods can be opened/closed, and posting into a closed period is rejected (409) with no journal
+written. Credit-memo/partial-payment execution remains pending.
 
 ## Deployment
 

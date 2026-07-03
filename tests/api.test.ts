@@ -196,6 +196,33 @@ describe("Hono API", () => {
     expect(match.findings.some((f: { code: string }) => f.code === "po_amount_variance")).toBe(true);
   });
 
+  test("closed accounting period blocks posting, reopening unblocks it", async () => {
+    const gHeaders = { ...headers, "x-tenant-id": "11111111-1111-4111-8111-111111111111" };
+    const period = (await (await app.request("/v1/accounting-periods", {
+      method: "POST",
+      headers: gHeaders,
+      body: JSON.stringify({ name: "FY", startsOn: "2020-01-01", endsOn: "2099-12-31" }),
+    })).json()).period;
+    expect(period.status).toBe("open");
+
+    const closed = (await (await app.request(`/v1/accounting-periods/${period.id}/close`, { method: "POST", headers: gHeaders })).json()).period;
+    expect(closed.status).toBe("closed");
+
+    const invoice = (await (await app.request("/v1/invoices", {
+      method: "POST",
+      headers: gHeaders,
+      body: JSON.stringify({ vendorName: "Widget Co", invoiceNumber: "PER-1", total: 100, currency: "USD" }),
+    })).json()).invoice;
+
+    const blocked = await app.request(`/v1/invoices/${invoice.id}/reprocess`, { method: "POST", headers: gHeaders });
+    expect(blocked.status).toBe(409);
+
+    await app.request(`/v1/accounting-periods/${period.id}/reopen`, { method: "POST", headers: gHeaders });
+    const unblocked = await app.request(`/v1/invoices/${invoice.id}/reprocess`, { method: "POST", headers: gHeaders });
+    expect(unblocked.status).toBe(200);
+    expect((await unblocked.json()).invoice.status).toBe("queued_for_payment");
+  });
+
   test("serves accounting credit, partial payment, aging, and FX endpoints", async () => {
     const create = await app.request("/v1/invoices", {
       method: "POST",

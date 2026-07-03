@@ -95,9 +95,11 @@ RLS coverage:
   `/v1/purchase-orders/:id/goods-receipts`), and a three-way match endpoint
   (`POST /v1/invoices/:id/three-way-match`) that runs the accounting `threeWayMatch` against the invoice's
   persisted PO and goods receipts. Covered by fast and live tests.
+- Accounting periods (`/v1/accounting-periods`, `.../close`, `.../reopen`) with a posting guard: a transition
+  to `posted` whose posting date falls in a closed period is rejected (`409 accounting_period_closed`) and no
+  journal is written. Covered by fast and live tests.
 
 ## Pending
-- Add accounting-period close/reopen workflow.
 - Add credit-memo and partial-payment execution/persistence (currently calculation-only).
 - Add debit memos, withholding tax, and multi-currency realized FX journal posting.
 - Add bank statement import format parsers.
