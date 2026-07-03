@@ -47,6 +47,12 @@
     "apps/api": {
       "name": "@atlas/api",
       "version": "0.1.0",
+      "dependencies": {
+        "pg": "^8.13.1",
+      },
+      "devDependencies": {
+        "@types/pg": "^8.11.10",
+      },
     },
     "apps/support-agent": {
       "name": "@atlas/support-agent",

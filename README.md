@@ -36,7 +36,13 @@ Optional local Postgres:
 docker compose up -d postgres
 ```
 
-The API tests run against an in-memory repository so CI and local verification do not require live AWS or Postgres. RLS is still represented in Drizzle and covered by SQL/policy tests.
+The API defaults to an in-memory repository so CI and local verification do not require live AWS or Postgres. When `DATABASE_URL` is set, the API uses the Postgres-backed repository (`PostgresInvoiceRepository`), which persists invoices, agent events, GL journals, payment runs, payments, bank transactions, and reconciliations under tenant-scoped RLS. The live path is exercised by `bun run test:live-api` (gated on a running Postgres):
+
+```powershell
+docker compose up -d postgres
+$env:DATABASE_URL="postgresql://atlas_owner:atlas_owner@localhost:5432/atlas_ap"
+bun.cmd run test:live-api
+```
 
 ## Run
 
@@ -79,7 +85,7 @@ Support Agent V2 adds a native belief-revision memory engine: deterministic fact
 Every pull request and every push to `main`/`v*` runs a full gate: frozen-lockfile install, ESLint,
 `bun audit`, license audit, release check, the test suite, live Postgres/Redis integration, typecheck,
 app/infra builds, and the container build. Security scanning runs in parallel: CodeQL (SAST), dependency
-review, Gitleaks secret scanning, and Dependabot updates. On pushes to `main`/`v*` a gated `publish-image`
+review, Gitleaks secret scanning, and Dependabot security updates. On pushes to `main`/`v*` a gated `publish-image`
 job pushes the support-agent image to GHCR. Full reference: `docs/ci-cd.md`.
 
 ## Support Agent V2 Release Gates

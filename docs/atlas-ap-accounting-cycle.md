@@ -83,12 +83,16 @@ RLS coverage:
 
 - `tests/rls.test.ts` checks accounting-cycle tables are present in the RLS migration.
 
+## Done
+
+- Persist invoices, agent events, GL journal entries/lines (posting and payment-run journals), payment runs,
+  payments, bank transactions, and reconciliations through `PostgresInvoiceRepository` (transactional,
+  tenant-scoped RLS), used when `DATABASE_URL` is set. Covered by `tests/api-live.test.ts` (`bun run test:live-api`).
+
 ## Pending
 
-- Persist journal/payment/reconciliation records through a real Postgres repository, not only the in-memory API repository.
 - Add vendor master and purchase order CRUD APIs.
 - Add accounting-period close/reopen workflow.
-- Add partial payments, credit memos, debit memos, withholding tax, and multi-currency realized FX.
+- Add credit-memo and partial-payment execution/persistence (currently calculation-only).
 - Add debit memos, withholding tax, and multi-currency realized FX journal posting.
 - Add bank statement import format parsers.
-- Run live Postgres RLS tests for the new accounting tables once Docker/staging Postgres is available.
