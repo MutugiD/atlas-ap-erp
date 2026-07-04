@@ -8,8 +8,9 @@ All `/v1` routes are tenant-scoped by the `withTenant` middleware. Send these he
 | `x-user-id` | Acting user UUID | a demo user UUID |
 | `x-user-role` | `ap_clerk` \| `approver` \| `admin` | `ap_clerk` |
 
-Bodies are JSON and validated with Zod; unknown/invalid fields are rejected. `GET /health` is the only
-un-scoped route.
+Bodies are JSON and validated with Zod; unknown/invalid fields are rejected. An invalid request body or a
+malformed tenant header returns `400 { error: "validation_error", issues: [...] }` (the Zod issue list), not a
+`500`. `GET /health` is the only un-scoped route.
 
 ## Invoices
 

@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { ZodError } from "zod";
 import { createAccountingPeriodSchema, createCreditMemoSchema, createDebitMemoSchema, createGoodsReceiptSchema, createInvoiceSchema, createProfitabilityInputSchema, createPurchaseOrderSchema, createVendorSchema, executePartialPaymentSchema, profitabilityComputeSchema, updateVendorSchema } from "@atlas/contracts";
 import { Supervisor } from "@atlas/agents";
 import { repository } from "./repository";
@@ -237,8 +238,12 @@ v1.post("/webhooks/email-inbound", async (c) => {
   return c.json({ accepted: true, invoice: result.invoice }, 202);
 });
 
-// A post into a closed accounting period is a conflict, not a server error.
 app.onError((err, c) => {
+  // Invalid/malformed request bodies (or headers) are the client's fault: 400, not 500.
+  if (err instanceof ZodError) {
+    return c.json({ error: "validation_error", issues: err.issues }, 400);
+  }
+  // A post into a closed accounting period is a conflict, not a server error.
   if (err instanceof ClosedPeriodError) {
     return c.json({ error: "accounting_period_closed", message: err.message, periodId: err.periodId }, 409);
   }

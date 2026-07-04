@@ -54,6 +54,28 @@ describe("Hono API", () => {
     expect(response.status).toBe(202);
   });
 
+  test("rejects an invalid request body with 400, not 500", async () => {
+    const response = await app.request("/v1/vendors", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ currency: "USD" }), // missing required `name`
+    });
+    expect(response.status).toBe(400);
+    const body = await response.json();
+    expect(body.error).toBe("validation_error");
+    expect(Array.isArray(body.issues)).toBe(true);
+  });
+
+  test("rejects a malformed tenant header with 400, not 500", async () => {
+    const response = await app.request("/v1/invoices", {
+      method: "POST",
+      headers: { ...headers, "x-tenant-id": "not-a-uuid" },
+      body: JSON.stringify({ total: 10, currency: "USD" }),
+    });
+    expect(response.status).toBe(400);
+    expect((await response.json()).error).toBe("validation_error");
+  });
+
   test("creates posting preview, payment run, and bank reconciliation for payable invoice", async () => {
     const create = await app.request("/v1/invoices", {
       method: "POST",
