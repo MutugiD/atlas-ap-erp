@@ -13,7 +13,8 @@ CI run via `bun run infra:synth`; an actual deploy requires an AWS account and c
   GHCR (`ghcr.io/<owner>/atlas-support-agent`, published by CI). `DATABASE_URL` / `REDIS_URL` are composed in
   the container from the injected DB secret (username/password) + RDS/Redis endpoints. `desiredCount` = 2 in prod.
 - **Async invoice processor** — S3 `ObjectCreated` → SQS (with DLQ, maxReceiveCount 3) → Lambda, in the VPC with
-  DB access and Bedrock invoke permissions.
+  DB access. Delegates to the **GLM-first Ollama provider** by default (`AGENT_PROVIDER=ollama`); Bedrock invoke
+  permissions are retained for the optional `bedrock` provider.
 - **Outputs**: service URL (ALB DNS), DB endpoint, DB secret ARN, Redis endpoint, bucket name, queue URL.
 
 Non-prod vs prod is gated on the `prod` context flag so non-prod stacks tear down cleanly:
@@ -26,8 +27,12 @@ Non-prod vs prod is gated on the `prod` context flag so non-prod stacks tear dow
    `token.actions.githubusercontent.com` for this repo, with permissions to deploy the stack
    (CloudFormation + the resource services). Set repo **variables** `AWS_DEPLOY_ROLE_ARN` and `AWS_REGION`, and
    create a `aws` GitHub Environment (optionally with required reviewers).
-3. Optionally override the image with `-c supportImage=<registry/image:tag>` and set `BEDROCK_SUPERVISOR_AGENT_ID`
-   / `BEDROCK_AGENTCORE_RUNTIME_ARN` in the environment if using live Bedrock (default `AGENT_PROVIDER=bedrock`).
+3. **Agent provider (GLM-first).** The processor defaults to `AGENT_PROVIDER=ollama`. Set `OLLAMA_URL` to a
+   **reachable** endpoint (Ollama cloud or a self-hosted Ollama/llama.cpp — `localhost` is not reachable from
+   Lambda) plus `OLLAMA_API_KEY` and the `OLLAMA_MODEL_*` tiers; these pass through from the deploy environment.
+   Without a reachable `OLLAMA_URL` the provider degrades to the deterministic rules. To use Bedrock instead, set
+   `AGENT_PROVIDER=bedrock` and `BEDROCK_SUPERVISOR_AGENT_ID` / `BEDROCK_AGENTCORE_RUNTIME_ARN`. Optionally override
+   the image with `-c supportImage=<registry/image:tag>`.
 
 ## Deploy
 

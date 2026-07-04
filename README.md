@@ -73,9 +73,9 @@ Set these before deploying CDK:
 - `AWS_PROFILE`
 - `DATABASE_URL`
 - `S3_INVOICE_BUCKET`
-- `BEDROCK_SUPERVISOR_AGENT_ID`
-- `BEDROCK_AGENTCORE_RUNTIME_ARN`
-- `AGENT_PROVIDER=bedrock`
+- `AGENT_PROVIDER=ollama` (GLM-first default; needs a reachable `OLLAMA_URL`)
+- `OLLAMA_URL`, `OLLAMA_API_KEY`, `OLLAMA_MODEL_{COMPLEX,STANDARD,SIMPLE}`
+- `BEDROCK_SUPERVISOR_AGENT_ID`, `BEDROCK_AGENTCORE_RUNTIME_ARN` (only if `AGENT_PROVIDER=bedrock`)
 
 The CDK stack creates the VPC, encrypted RDS Postgres (backups + security groups), ElastiCache Redis, the support-agent service on Fargate behind an ALB (health-checked on `/health/ready`), the S3 document bucket, SQS processing queue + DLQ, in-VPC Lambda processor, IAM boundaries, and stack outputs. Bedrock AgentCore/Gateway identifiers are injected as configuration because account-level Bedrock setup varies. Full deploy guide (prerequisites, OIDC role, deploy workflow, rollback): `docs/deploy.md`.
 
@@ -83,9 +83,12 @@ The CDK stack creates the VPC, encrypted RDS Postgres (backups + security groups
 
 The invoice agent provider is selectable via `AGENT_PROVIDER`:
 
-- `local` (default) — deterministic provider, no external calls (used by tests).
-- `bedrock` — AWS Bedrock agent (`BEDROCK_SUPERVISOR_AGENT_ID`).
-- `ollama` — extracts invoice fields with an Ollama model (`OLLAMA_URL`, `OLLAMA_MODEL`, optional `OLLAMA_API_KEY`), delegating validation/matching/coding/routing to the deterministic rules and falling back to them if the model is unreachable.
+- `local` (default in code/tests) — deterministic provider, no external calls.
+- `ollama` — **GLM-first tiered delegation** and the intended runtime provider: `extract` → complex
+  (`glm-5.2:cloud`), GL `code` → standard (`glm-5.1:cloud`), `route` → simple (`gemini-3-flash`); `validate`/`match`
+  stay deterministic. Speaks Ollama `/api/chat` or an OpenAI-compatible endpoint (llama.cpp) via `OLLAMA_API_STYLE`,
+  and degrades to the deterministic rules if a model is unreachable. See `docs/agent-routing.md`.
+- `bedrock` — optional AWS Bedrock agent seam (`BEDROCK_SUPERVISOR_AGENT_ID`).
 
 Atlas AP uses a Supervisor agent to route invoices through extraction, validation, 3-way matching, GL coding, and approval routing. Clean PO-backed invoices can post without human touch; low-confidence, duplicate, or variance cases move to an exception queue. Every agent and human decision is recorded in `agent_events`, and tenant isolation is enforced through Postgres RLS with `SET LOCAL app.tenant_id`.
 
