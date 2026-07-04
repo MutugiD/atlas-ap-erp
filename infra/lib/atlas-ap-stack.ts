@@ -128,9 +128,20 @@ export class AtlasApStack extends Stack {
       vpcSubnets: { subnetType: SubnetType.PRIVATE_WITH_EGRESS },
       securityGroups: [processorSg],
       environment: {
-        AGENT_PROVIDER: "bedrock",
+        // GLM-first: the processor delegates to the tiered Ollama provider by default.
+        // A reachable OLLAMA_URL is required (Ollama cloud or a self-hosted endpoint) —
+        // localhost is not reachable from Lambda; without it the provider degrades to the
+        // deterministic local rules. Set AGENT_PROVIDER=bedrock to use the Bedrock seam instead.
+        AGENT_PROVIDER: process.env.AGENT_PROVIDER ?? "ollama",
         S3_INVOICE_BUCKET: documents.bucketName,
         DB_SECRET_ARN: dbSecret.secretArn,
+        OLLAMA_URL: process.env.OLLAMA_URL ?? "",
+        OLLAMA_API_KEY: process.env.OLLAMA_API_KEY ?? "",
+        OLLAMA_API_STYLE: process.env.OLLAMA_API_STYLE ?? "ollama",
+        OLLAMA_MODEL_COMPLEX: process.env.OLLAMA_MODEL_COMPLEX ?? "glm-5.2:cloud",
+        OLLAMA_MODEL_STANDARD: process.env.OLLAMA_MODEL_STANDARD ?? "glm-5.1:cloud",
+        OLLAMA_MODEL_SIMPLE: process.env.OLLAMA_MODEL_SIMPLE ?? "gemini-3-flash-preview:latest",
+        // Bedrock retained as an optional provider (AGENT_PROVIDER=bedrock).
         BEDROCK_SUPERVISOR_AGENT_ID: process.env.BEDROCK_SUPERVISOR_AGENT_ID ?? "",
         BEDROCK_AGENTCORE_RUNTIME_ARN: process.env.BEDROCK_AGENTCORE_RUNTIME_ARN ?? "",
       },
