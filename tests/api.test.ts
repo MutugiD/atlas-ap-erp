@@ -95,7 +95,7 @@ describe("Hono API", () => {
     const paymentRunResponse = await app.request("/v1/payment-runs", {
       method: "POST",
       headers,
-      body: JSON.stringify({ scheduledDate: "2026-07-20" }),
+      body: JSON.stringify({ scheduledDate: "2099-12-31" }),
     });
     const paymentRun = (await paymentRunResponse.json()).paymentRun;
     expect(paymentRun.payments.some((payment: { invoiceId: string }) => payment.invoiceId === invoice.id)).toBe(true);

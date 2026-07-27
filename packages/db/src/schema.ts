@@ -101,6 +101,26 @@ export const invoices = pgTable(
   (t) => [index("invoices_tenant_status_idx").on(t.tenantId, t.status), tenantPolicy(t)],
 ).enableRLS();
 
+export const invoiceRiskAssessments = pgTable(
+  "invoice_risk_assessments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    invoiceId: uuid("invoice_id").notNull().references(() => invoices.id),
+    riskLevel: text("risk_level").notNull(),
+    riskScore: numeric("risk_score", { precision: 5, scale: 2 }).notNull(),
+    findings: jsonb("findings").notNull(),
+    features: jsonb("features").notNull(),
+    ruleVersion: text("rule_version").notNull(),
+    modelVersion: text("model_version").notNull(),
+    reviewStatus: text("review_status").notNull(),
+    reviewedBy: uuid("reviewed_by"),
+    reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("invoice_risk_tenant_idx").on(t.tenantId, t.createdAt), index("invoice_risk_invoice_idx").on(t.tenantId, t.invoiceId), tenantPolicy(t)],
+).enableRLS();
+
 export const accountingPeriods = pgTable(
   "accounting_periods",
   {

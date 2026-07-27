@@ -36,7 +36,30 @@ v1.post("/invoices/:id/reprocess", async (c) => {
   const invoice = await repository.getInvoice(tenant, c.req.param("id"));
   if (!invoice) return c.notFound();
   const result = await supervisor.process(tenant, invoice, repository);
-  return c.json(result);
+  const risk = await repository.assessInvoiceRisk(tenant, result.invoice.id);
+  return c.json({ ...result, risk });
+});
+
+v1.post("/invoices/:id/risk-assessment", async (c) => {
+  const risk = await repository.assessInvoiceRisk(c.get("tenant"), c.req.param("id"));
+  return c.json({ risk });
+});
+
+v1.get("/risk-findings", async (c) => c.json({ findings: await repository.listRiskFindings(c.get("tenant")) }));
+
+v1.get("/invoices/:id/risk-findings", async (c) => c.json({ findings: await repository.listRiskFindings(c.get("tenant"), c.req.param("id")) }));
+
+v1.post("/risk-findings/:id/review", async (c) => {
+  const body = await c.req.json();
+  return c.json({ finding: await repository.reviewRiskFinding(c.get("tenant"), c.req.param("id"), body) });
+});
+
+v1.post("/risk-reports", async (c) => {
+  const report = await repository.riskReport(c.get("tenant"));
+  if (c.req.header("accept")?.includes("text/csv")) {
+    return new Response(report.csv, { headers: { "content-type": "text/csv; charset=utf-8", "content-disposition": "attachment; filename=atlas-risk-report.csv" } });
+  }
+  return c.json(report);
 });
 
 v1.post("/invoices/:id/posting-preview", async (c) => {

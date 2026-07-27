@@ -357,3 +357,33 @@ export const transitionSchema = z.object({
   to: invoiceStatusSchema,
 });
 
+export const invoiceRiskFindingSchema = z.object({
+  id: uuidSchema,
+  code: z.string(),
+  severity: z.enum(["warning", "high"]),
+  points: z.number().int().nonnegative(),
+  message: z.string(),
+});
+export type InvoiceRiskFinding = z.infer<typeof invoiceRiskFindingSchema>;
+
+export const invoiceRiskAssessmentSchema = z.object({
+  id: uuidSchema,
+  tenantId: uuidSchema,
+  invoiceId: uuidSchema,
+  riskLevel: z.enum(["low", "review", "high"]),
+  riskScore: z.number().min(0).max(100),
+  findings: z.array(invoiceRiskFindingSchema),
+  features: z.record(z.union([z.string(), z.number(), z.boolean()])),
+  ruleVersion: z.string(),
+  modelVersion: z.string(),
+  reviewStatus: z.enum(["open", "not_required", "confirmed_issue", "false_positive", "accepted_exception"]),
+  reviewedBy: uuidSchema.optional(),
+  reviewedAt: z.string().optional(),
+  createdAt: z.string(),
+});
+export type InvoiceRiskAssessment = z.infer<typeof invoiceRiskAssessmentSchema>;
+
+export const reviewRiskFindingSchema = z.object({
+  status: z.enum(["confirmed_issue", "false_positive", "accepted_exception"]),
+});
+export type ReviewRiskFindingInput = z.infer<typeof reviewRiskFindingSchema>;
