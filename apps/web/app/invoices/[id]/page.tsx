@@ -1,22 +1,25 @@
 import type { AgentEvent, Invoice } from "@atlas/contracts";
-import { approveInvoice, rejectInvoice, reprocessInvoice } from "../../actions";
+import { approveInvoice, assessInvoiceRisk, rejectInvoice, reprocessInvoice } from "../../actions";
 
 type Finding = { code: string; severity: "error" | "warning"; message: string };
 type Validation = { ok: boolean; findings: Finding[] };
+type Risk = { id: string; riskLevel: "low" | "review" | "high"; riskScore: number; findings: { code: string; message: string; severity: string }[]; reviewStatus: string; ruleVersion: string };
 
-async function loadInvoice(id: string): Promise<{ invoice?: Invoice; events: AgentEvent[]; validation?: Validation }> {
+async function loadInvoice(id: string): Promise<{ invoice?: Invoice; events: AgentEvent[]; validation?: Validation; risk?: Risk }> {
   try {
     const base = process.env.API_BASE_URL ?? "http://localhost:3001";
     const headers = { "content-type": "application/json", "x-tenant-id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" };
-    const [detail, events, validate] = await Promise.all([
+    const [detail, events, validate, riskResponse] = await Promise.all([
       fetch(`${base}/v1/invoices/${id}`, { headers, cache: "no-store" }),
       fetch(`${base}/v1/invoices/${id}/events`, { headers, cache: "no-store" }),
       fetch(`${base}/v1/invoices/${id}/validate`, { method: "POST", headers, cache: "no-store" }),
+      fetch(`${base}/v1/invoices/${id}/risk-findings`, { headers, cache: "no-store" }),
     ]);
     return {
       invoice: (await detail.json()).invoice,
       events: (await events.json()).events ?? [],
       validation: validate.ok ? (await validate.json()).validation : undefined,
+      risk: riskResponse.ok ? (await riskResponse.json()).findings?.[0] : undefined,
     };
   } catch {
     return { events: [] };
@@ -29,7 +32,7 @@ function confidenceOf(output: unknown): string {
 
 export default async function InvoiceDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const { invoice, events, validation } = await loadInvoice(id);
+  const { invoice, events, validation, risk } = await loadInvoice(id);
   if (!invoice) return <div className="card">Invoice not found.</div>;
   return (
     <>
@@ -45,6 +48,12 @@ export default async function InvoiceDetail({ params }: { params: Promise<{ id: 
         <form action={reprocessInvoice.bind(null, invoice.id)}><button>Reprocess</button></form>
         <form action={approveInvoice.bind(null, invoice.id)}><button>Approve</button></form>
         <form action={rejectInvoice.bind(null, invoice.id)}><button>Reject</button></form>
+        <form action={assessInvoiceRisk.bind(null, invoice.id)}><button>Assess risk</button></form>
+      </div>
+
+      <div className="card">
+        <h2 style={{ marginTop: 0 }}>Fraud risk {risk ? <span className={`rag rag-${risk.riskLevel === "high" ? "red" : risk.riskLevel === "review" ? "yellow" : "green"}`}>{risk.riskLevel} · {risk.riskScore}/100</span> : <span className="status">not assessed</span>}</h2>
+        {risk ? <><p>Rules: {risk.ruleVersion} · Review: {risk.reviewStatus}</p><ul>{risk.findings.map((f) => <li key={f.code}><strong>{f.code}</strong> — {f.message}</li>)}</ul></> : <p>Run the assessment to evaluate duplicate, arithmetic, vendor, PO, and unusual-amount risks.</p>}
       </div>
 
       <div className="card">
@@ -81,4 +90,3 @@ export default async function InvoiceDetail({ params }: { params: Promise<{ id: 
     </>
   );
 }
-

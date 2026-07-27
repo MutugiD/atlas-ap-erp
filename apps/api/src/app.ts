@@ -62,6 +62,14 @@ v1.post("/risk-reports", async (c) => {
   return c.json(report);
 });
 
+v1.get("/risk-reports", async (c) => {
+  const report = await repository.riskReport(c.get("tenant"));
+  if (c.req.query("format") === "csv" || c.req.header("accept")?.includes("text/csv")) {
+    return new Response(report.csv, { headers: { "content-type": "text/csv; charset=utf-8", "content-disposition": "attachment; filename=atlas-risk-report.csv" } });
+  }
+  return c.json(report);
+});
+
 v1.post("/invoices/:id/posting-preview", async (c) => {
   return c.json({ journal: await repository.previewPosting(c.get("tenant"), c.req.param("id")) });
 });

@@ -8,8 +8,9 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <nav className="shell-nav">
           <a href="/">Inbox</a>
           <a href="/exceptions">Exceptions</a>
-          <a href="/approvals">Approvals</a>
-          <a href="/profitability">Profitability</a>
+        <a href="/approvals">Approvals</a>
+        <a href="/risk">Risk</a>
+        <a href="/profitability">Profitability</a>
           <a href="/ops">Ops</a>
         </nav>
         <main>{children}</main>
@@ -17,4 +18,3 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     </html>
   );
 }
-
