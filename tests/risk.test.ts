@@ -28,5 +28,8 @@ describe("invoice risk controls", () => {
     const report = await app.request("/v1/risk-reports", { method: "POST", headers: { ...headers, accept: "text/csv" } });
     expect(report.headers.get("content-type")).toContain("text/csv");
     expect(await report.text()).toContain("Risk level");
+    const getReport = await app.request("/v1/risk-reports?format=csv", { headers });
+    expect(getReport.status).toBe(200);
+    expect(await getReport.text()).toContain("Invoice ID");
   });
 });

@@ -49,3 +49,13 @@ export async function reprocessInvoice(id: string) {
   revalidatePath("/", "layout");
 }
 
+export async function assessInvoiceRisk(id: string) {
+  await fetch(`${apiBase}/v1/invoices/${id}/risk-assessment`, { method: "POST", headers });
+  revalidatePath(`/invoices/${id}`);
+  revalidatePath("/risk");
+}
+
+export async function reviewRiskFinding(id: string, status: "confirmed_issue" | "false_positive" | "accepted_exception") {
+  await fetch(`${apiBase}/v1/risk-findings/${id}/review`, { method: "POST", headers, body: JSON.stringify({ status }) });
+  revalidatePath("/risk");
+}
