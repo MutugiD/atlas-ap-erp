@@ -10,7 +10,7 @@ bun.cmd run dev:web
 bun.cmd run dev:support
 ```
 
-## Create Demo Invoice
+## Create Test Invoice
 
 ```powershell
 Invoke-RestMethod -Method Post http://localhost:3001/v1/invoices `

@@ -28,7 +28,7 @@ Adds the shared Support Agent contracts and native memory engine skeleton: deter
 Adds the Support Agent V2 Fastify app and proves the native engine against the V1 behavioral contract.
 
 **Changes**
-- Add `apps/support-agent` with health, readiness, metrics, chat, memory, timeline, rich timeline, fact lookup, demo, reset, and admin shell routes.
+- Add `apps/support-agent` with health, readiness, metrics, chat, memory, timeline, rich timeline, fact lookup, sample-response, reset, and admin shell routes.
 - Add JWT/API-key-shaped auth middleware with org/principal context.
 - Add `with_memory` vs `stateless` chat behavior, guaranteeing stateless mode has zero memory side effects.
 - Add local queue fallback seam so async BullMQ can replace it without changing routes.
