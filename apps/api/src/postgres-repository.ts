@@ -13,6 +13,8 @@ import {
   type CreateProfitabilityInput,
   type GoodsReceiptRecord,
   type Invoice,
+  type InvoiceRiskAssessment,
+  type ReviewRiskFindingInput,
   type PartialPaymentRecord,
   type ProfitabilityComputeInput,
   type ProfitabilityInputRecord,
@@ -22,6 +24,7 @@ import {
   type UpdateVendorInput,
   type Vendor,
 } from "@atlas/contracts";
+import { assessInvoiceRisk, riskAssessmentToCsv } from "@atlas/risk";
 import { computeProfitability as computeProfitabilityReport, summarize, withTrend, type ReportWithTrend } from "@atlas/profitability";
 import {
   applyCreditMemos,
@@ -574,6 +577,49 @@ export class PostgresInvoiceRepository implements InvoiceRepository {
     });
   }
 
+  async assessInvoiceRisk(ctx: TenantContext, invoiceId: string) {
+    return this.tx(ctx.tenantId, async (client) => {
+      const invoiceResult = await client.query("select * from invoices where tenant_id = $1 and id = $2 limit 1", [ctx.tenantId, invoiceId]);
+      if (!invoiceResult.rowCount) throw new Error("Invoice not found");
+      const invoice = rowToInvoice(invoiceResult.rows[0]);
+      const vendorResult = invoice.vendorId ? await client.query("select * from vendors where tenant_id = $1 and id = $2 limit 1", [ctx.tenantId, invoice.vendorId]) : { rows: [] };
+      const poResult = invoice.poId ? await client.query("select * from purchase_orders where tenant_id = $1 and id = $2 limit 1", [ctx.tenantId, invoice.poId]) : { rows: [] };
+      const receiptsResult = invoice.poId ? await client.query("select * from goods_receipts where tenant_id = $1 and po_id = $2", [ctx.tenantId, invoice.poId]) : { rows: [] };
+      const peers = await client.query("select * from invoices where tenant_id = $1 and id <> $2", [ctx.tenantId, invoiceId]);
+      const assessment = assessInvoiceRisk({ invoice, vendor: vendorResult.rows[0] ? rowToVendor(vendorResult.rows[0]) : undefined, purchaseOrder: poResult.rows[0] ? rowToPurchaseOrder(poResult.rows[0]) : undefined, receipts: receiptsResult.rows.map(rowToGoodsReceipt), peerInvoices: peers.rows.map(rowToInvoice) });
+      await client.query(
+        `insert into invoice_risk_assessments (id, tenant_id, invoice_id, risk_level, risk_score, findings, features, rule_version, model_version, review_status)
+         values ($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,$8,$9,$10)`,
+        [assessment.id, ctx.tenantId, invoiceId, assessment.riskLevel, String(assessment.riskScore), JSON.stringify(assessment.findings), JSON.stringify(assessment.features), assessment.ruleVersion, assessment.modelVersion, assessment.reviewStatus],
+      );
+      await client.query(
+        `insert into agent_events (id, tenant_id, invoice_id, agent, actor, input, output, tokens, latency_ms) values ($1,$2,$3,'validation','system',$4::jsonb,$5::jsonb,0,0)`,
+        [crypto.randomUUID(), ctx.tenantId, invoiceId, JSON.stringify({ riskAssessment: true }), JSON.stringify(assessment)],
+      );
+      return assessment;
+    });
+  }
+
+  async listRiskFindings(ctx: TenantContext, invoiceId?: string) {
+    return this.tx(ctx.tenantId, async (client) => {
+      const result = await client.query("select * from invoice_risk_assessments where tenant_id=$1 and ($2::uuid is null or invoice_id=$2) order by created_at desc", [ctx.tenantId, invoiceId ?? null]);
+      return result.rows.map(rowToRiskAssessment);
+    });
+  }
+
+  async reviewRiskFinding(ctx: TenantContext, assessmentId: string, input: ReviewRiskFindingInput) {
+    return this.tx(ctx.tenantId, async (client) => {
+      const result = await client.query("update invoice_risk_assessments set review_status=$3, reviewed_by=$4, reviewed_at=now() where tenant_id=$1 and id=$2 returning *", [ctx.tenantId, assessmentId, input.status, ctx.userId]);
+      if (!result.rowCount) throw new Error("Risk assessment not found");
+      return rowToRiskAssessment(result.rows[0]);
+    });
+  }
+
+  async riskReport(ctx: TenantContext) {
+    const assessments = await this.listRiskFindings(ctx);
+    return { assessments, csv: riskAssessmentToCsv(assessments) };
+  }
+
   async executePartialPayment(ctx: TenantContext, invoiceId: string, requestedAmount: number): Promise<PartialPaymentExecution> {
     return this.tx(ctx.tenantId, async (client) => {
       const invoiceResult = await client.query("select * from invoices where tenant_id = $1 and id = $2 limit 1", [ctx.tenantId, invoiceId]);
@@ -836,6 +882,18 @@ function rowToGoodsReceipt(row: Record<string, unknown>): GoodsReceiptRecord {
     poId: String(row.po_id),
     description: String(row.description),
     quantityReceived: Number(row.quantity_received),
+    createdAt: new Date(row.created_at as string).toISOString(),
+  };
+}
+
+function rowToRiskAssessment(row: Record<string, unknown>): InvoiceRiskAssessment {
+  const parse = (value: unknown) => typeof value === "string" ? JSON.parse(value) : value;
+  return {
+    id: String(row.id), tenantId: String(row.tenant_id), invoiceId: String(row.invoice_id),
+    riskLevel: String(row.risk_level) as InvoiceRiskAssessment["riskLevel"], riskScore: Number(row.risk_score),
+    findings: parse(row.findings) as InvoiceRiskAssessment["findings"], features: parse(row.features) as InvoiceRiskAssessment["features"],
+    ruleVersion: String(row.rule_version), modelVersion: String(row.model_version), reviewStatus: String(row.review_status) as InvoiceRiskAssessment["reviewStatus"],
+    reviewedBy: row.reviewed_by ? String(row.reviewed_by) : undefined, reviewedAt: row.reviewed_at ? new Date(row.reviewed_at as string).toISOString() : undefined,
     createdAt: new Date(row.created_at as string).toISOString(),
   };
 }

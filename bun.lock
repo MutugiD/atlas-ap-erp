@@ -90,6 +90,10 @@
       "name": "@atlas/profitability",
       "version": "0.1.0",
     },
+    "packages/risk": {
+      "name": "@atlas/risk",
+      "version": "0.1.0",
+    },
     "packages/support-contracts": {
       "name": "@atlas/support-contracts",
       "version": "0.1.0",
@@ -119,6 +123,8 @@
     "@atlas/memory-engine": ["@atlas/memory-engine@workspace:packages/memory-engine"],
 
     "@atlas/profitability": ["@atlas/profitability@workspace:packages/profitability"],
+
+    "@atlas/risk": ["@atlas/risk@workspace:packages/risk"],
 
     "@atlas/support-agent": ["@atlas/support-agent@workspace:apps/support-agent"],
 

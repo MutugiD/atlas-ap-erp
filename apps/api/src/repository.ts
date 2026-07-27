@@ -13,6 +13,8 @@ import {
   type GoodsReceiptRecord,
   type CreateProfitabilityInput,
   type Invoice,
+  type InvoiceRiskAssessment,
+  type ReviewRiskFindingInput,
   type PartialPaymentRecord,
   type ProfitabilityComputeInput,
   type ProfitabilityInputRecord,
@@ -22,6 +24,7 @@ import {
   type UpdateVendorInput,
   type Vendor,
 } from "@atlas/contracts";
+import { assessInvoiceRisk, riskAssessmentToCsv } from "@atlas/risk";
 import type { AgentRepository } from "@atlas/agents";
 import {
   computeProfitability as computeProfitabilityReport,
@@ -109,6 +112,10 @@ export interface InvoiceRepository extends AgentRepository {
   generateProfitabilityReport(ctx: TenantContext, params: ProfitabilityComputeInput): Promise<ProfitabilityReportRecord>;
   listProfitabilityReports(ctx: TenantContext): Promise<ProfitabilityReportRecord[]>;
   getProfitabilityReport(ctx: TenantContext, id: string): Promise<ProfitabilityReportRecord | undefined>;
+  assessInvoiceRisk(ctx: TenantContext, invoiceId: string): Promise<InvoiceRiskAssessment>;
+  listRiskFindings(ctx: TenantContext, invoiceId?: string): Promise<InvoiceRiskAssessment[]>;
+  reviewRiskFinding(ctx: TenantContext, assessmentId: string, input: ReviewRiskFindingInput): Promise<InvoiceRiskAssessment>;
+  riskReport(ctx: TenantContext): Promise<{ assessments: InvoiceRiskAssessment[]; csv: string }>;
 }
 
 export interface PartialPaymentExecution {
@@ -131,6 +138,7 @@ export class InMemoryInvoiceRepository implements InvoiceRepository {
   private readonly debitMemos = new Map<string, DebitMemoRecord>();
   private readonly profitabilityInputs: ProfitabilityInputRecord[] = [];
   private readonly profitabilityReports: ProfitabilityReportRecord[] = [];
+  private readonly riskAssessments = new Map<string, InvoiceRiskAssessment>();
 
   async createInvoice(ctx: TenantContext, input: CreateInvoiceInput) {
     const id = crypto.randomUUID();
@@ -245,6 +253,35 @@ export class InMemoryInvoiceRepository implements InvoiceRepository {
 
   async listInvoices(ctx: TenantContext) {
     return [...this.invoices.values()].filter((invoice) => invoice.tenantId === ctx.tenantId);
+  }
+
+  async assessInvoiceRisk(ctx: TenantContext, invoiceId: string) {
+    const invoice = await this.getInvoice(ctx, invoiceId);
+    if (!invoice) throw new Error("Invoice not found");
+    const vendor = invoice.vendorId ? await this.getVendor(ctx, invoice.vendorId) : undefined;
+    const purchaseOrder = invoice.poId ? await this.getPurchaseOrder(ctx, invoice.poId) : undefined;
+    const receipts = purchaseOrder ? await this.listGoodsReceipts(ctx, purchaseOrder.id) : [];
+    const assessment = assessInvoiceRisk({ invoice, vendor, purchaseOrder, receipts, peerInvoices: await this.listInvoices(ctx) });
+    this.riskAssessments.set(assessment.id, assessment);
+    this.events.push({ id: crypto.randomUUID(), tenantId: ctx.tenantId, invoiceId, agent: "validation", actor: "system", input: { riskAssessment: true }, output: assessment, tokens: 0, latencyMs: 0, createdAt: now() });
+    return assessment;
+  }
+
+  async listRiskFindings(ctx: TenantContext, invoiceId?: string) {
+    return [...this.riskAssessments.values()].filter((item) => item.tenantId === ctx.tenantId && (!invoiceId || item.invoiceId === invoiceId));
+  }
+
+  async reviewRiskFinding(ctx: TenantContext, assessmentId: string, input: ReviewRiskFindingInput) {
+    const prior = this.riskAssessments.get(assessmentId);
+    if (!prior || prior.tenantId !== ctx.tenantId) throw new Error("Risk assessment not found");
+    const updated = { ...prior, reviewStatus: input.status, reviewedBy: ctx.userId, reviewedAt: now() };
+    this.riskAssessments.set(assessmentId, updated);
+    return updated;
+  }
+
+  async riskReport(ctx: TenantContext) {
+    const assessments = await this.listRiskFindings(ctx);
+    return { assessments, csv: riskAssessmentToCsv(assessments) };
   }
 
   async getInvoice(ctx: TenantContext, id: string) {
