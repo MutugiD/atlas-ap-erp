@@ -1,6 +1,6 @@
 # atlas-ap-erp
 
-Atlas AP ERP is an open-source, end-to-end, multi-tenant invoice-to-pay ERP platform with deterministic accounting controls, agentic processing, profitability reporting, bank reconciliation, and optional invoice risk analytics. It implements the architecture described in `docs/implementation-session.md`: Bun, Hono, Next.js, Drizzle/Postgres RLS, AWS deployment seams, deterministic local agents, and testable API/UI/domain behavior.
+Atlas AP ERP is an open-source, end-to-end, multi-tenant invoice-to-pay ERP platform with deterministic accounting controls, agentic processing, spend and margin analytics, bank reconciliation, and optional invoice risk analytics. It implements the architecture described in `docs/implementation-session.md`: Bun, Hono, Next.js, Drizzle/Postgres RLS, AWS deployment seams, deterministic local agents, and testable API/UI/domain behavior.
 
 ## What Ships
 
@@ -10,7 +10,7 @@ Atlas AP ERP is an open-source, end-to-end, multi-tenant invoice-to-pay ERP plat
 - `packages/contracts`: Zod contracts shared by API, agents, DB, web, and Lambda.
 - `packages/accounting`: deterministic AP accounting controls for data entry, PO matching, posting, payment runs, and bank reconciliation.
 - `packages/risk`: tenant-scoped, explainable invoice risk assessment with deterministic rules, review workflow, and CSV reporting.
-- `packages/profitability`: deterministic agency P&L engine — gross → delivery (after labor) → overhead → net margin by account and service line, with media pass-through markup, RAG status, and month-over-month trend. See `docs/profitability.md`.
+- `packages/profitability`: deterministic spend and margin engine — gross → delivery (after labor) → overhead → net margin by account and service line, with AP/vendor spend context, media pass-through markup, RAG status, and month-over-month trend. See `docs/profitability.md`.
 - `packages/agents`: deterministic local supervisor plus Bedrock adapter seam.
 - `packages/db`: Drizzle schema and a handwritten RLS migration reviewed for `ENABLE ROW LEVEL SECURITY`.
 - `packages/support-contracts`, `packages/memory-engine`, `packages/support-db`: Support Agent V2 contracts, native memory engine, and pgvector/RLS schema.
@@ -56,7 +56,7 @@ bun.cmd run dev:support
 
 For local UI testing **no database is required** — with `DATABASE_URL` unset the API uses the in-memory
 repository. Start `dev:api` (http://localhost:3001) and `dev:web` (http://localhost:3000), then open
-`/profitability`: add a few inputs for a period, click **Generate report**, and the RAG scorecard (by account
+`/profitability`: add a few margin inputs for a period, click **Generate report**, and review the AP/vendor spend context alongside the RAG scorecard (by account
 and service line, with month-over-month trend) renders. The web app talks to the API at `API_BASE_URL`
 (default `http://localhost:3001`).
 

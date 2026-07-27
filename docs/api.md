@@ -78,7 +78,7 @@ writes no journal.
 | POST | `/v1/debit-memos` | `{ vendorId?, amount, currency, reason? }` | Issue a vendor debit memo (e.g. a return); posts a balanced `debit_memo` GL journal (Dr AP `2100`, Cr purchase returns `5100`). Returns `{ debitMemo, journal }`. |
 | GET | `/v1/debit-memos` | — | List debit memos. |
 
-## Profitability
+## Spend & Margin Analytics
 
 | Method | Path | Body / query | Purpose |
 |---|---|---|---|
