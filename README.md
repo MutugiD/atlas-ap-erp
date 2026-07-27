@@ -1,6 +1,6 @@
 # atlas-ap-erp
 
-Atlas AP ERP is an end-to-end, multi-tenant invoice-to-pay demo for an agentic ERP module. It implements the architecture described in `docs/implementation-session.md`: Bun, Hono, Next.js, Drizzle/Postgres RLS, AWS deployment seams, deterministic local agents, and testable API/UI/domain behavior.
+Atlas AP ERP is an open-source, end-to-end, multi-tenant invoice-to-pay ERP platform with deterministic accounting controls, agentic processing, profitability reporting, bank reconciliation, and optional invoice risk analytics. It implements the architecture described in `docs/implementation-session.md`: Bun, Hono, Next.js, Drizzle/Postgres RLS, AWS deployment seams, deterministic local agents, and testable API/UI/domain behavior.
 
 ## What Ships
 
@@ -9,6 +9,7 @@ Atlas AP ERP is an end-to-end, multi-tenant invoice-to-pay demo for an agentic E
 - `apps/support-agent`: Fastify Support Agent V2 API with native memory, belief revision, auth seams, queue seams, metrics, and admin shell.
 - `packages/contracts`: Zod contracts shared by API, agents, DB, web, and Lambda.
 - `packages/accounting`: deterministic AP accounting controls for data entry, PO matching, posting, payment runs, and bank reconciliation.
+- `packages/risk`: tenant-scoped, explainable invoice risk assessment with deterministic rules, review workflow, and CSV reporting.
 - `packages/profitability`: deterministic agency P&L engine — gross → delivery (after labor) → overhead → net margin by account and service line, with media pass-through markup, RAG status, and month-over-month trend. See `docs/profitability.md`.
 - `packages/agents`: deterministic local supervisor plus Bedrock adapter seam.
 - `packages/db`: Drizzle schema and a handwritten RLS migration reviewed for `ENABLE ROW LEVEL SECURITY`.
@@ -58,6 +59,10 @@ repository. Start `dev:api` (http://localhost:3001) and `dev:web` (http://localh
 `/profitability`: add a few inputs for a period, click **Generate report**, and the RAG scorecard (by account
 and service line, with month-over-month trend) renders. The web app talks to the API at `API_BASE_URL`
 (default `http://localhost:3001`).
+
+For invoice risk review, open `/risk`, assess an invoice from its detail page, inspect the triggered controls,
+review the finding, and export the tenant-scoped CSV report. Risk findings are review signals and do not by
+themselves determine fraud or bypass accounting controls. See `docs/fraud-risk.md`.
 
 Default tenant headers for API calls:
 
