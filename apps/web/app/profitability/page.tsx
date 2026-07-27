@@ -1,122 +1,32 @@
-import type { ProfitabilityReportRecord } from "@atlas/contracts";
+import type { Invoice, ProfitabilityReportRecord, Vendor } from "@atlas/contracts";
 import type { ExecutiveSummary, ProfitabilityReport, ReportWithTrend, Rollup } from "@atlas/profitability";
 import { addProfitabilityInput, generateProfitabilityReport } from "./actions";
 
 const apiBase = process.env.API_BASE_URL ?? "http://localhost:3001";
 const tenant = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 
-async function loadReports(): Promise<ProfitabilityReportRecord[]> {
-  try {
-    const response = await fetch(`${apiBase}/v1/profitability/reports`, { headers: { "x-tenant-id": tenant }, cache: "no-store" });
-    return (await response.json()).reports ?? [];
-  } catch {
-    return [];
-  }
-}
-
+async function loadReports(): Promise<ProfitabilityReportRecord[]> { try { const response = await fetch(`${apiBase}/v1/profitability/reports`, { headers: { "x-tenant-id": tenant }, cache: "no-store" }); return (await response.json()).reports ?? []; } catch { return []; } }
+async function loadApSpend(): Promise<{ invoices: Invoice[]; vendors: Vendor[] }> { try { const headers = { "x-tenant-id": tenant }; const [invoiceResponse, vendorResponse] = await Promise.all([fetch(`${apiBase}/v1/invoices`, { headers, cache: "no-store" }), fetch(`${apiBase}/v1/vendors`, { headers, cache: "no-store" })]); return { invoices: (await invoiceResponse.json()).invoices ?? [], vendors: (await vendorResponse.json()).vendors ?? [] }; } catch { return { invoices: [], vendors: [] }; } }
 const money = (n: number) => n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const percent = (n: number) => `${(n * 100).toFixed(1)}%`;
-const arrow = (t?: string) => (t === "up" ? "▲" : t === "down" ? "▼" : t === "new" ? "＋" : "▬");
-
+const arrow = (trend?: string) => trend === "up" ? "▲" : trend === "down" ? "▼" : trend === "new" ? "+" : "▬";
 type TrendRollup = Rollup & { trend?: string; netMarginDelta?: number };
 
-function RollupTable({ title, rows, trend }: { title: string; rows: Rollup[]; trend?: TrendRollup[] }) {
-  const trendByKey = new Map((trend ?? []).map((r) => [r.key, r]));
-  return (
-    <div className="card">
-      <h3>{title}</h3>
-      <table className="ptable">
-        <thead>
-          <tr><th>Name</th><th>Revenue</th><th>Gross</th><th>Net</th><th>Net %</th><th>Status</th><th>MoM</th></tr>
-        </thead>
-        <tbody>
-          {rows.map((r) => {
-            const t = trendByKey.get(r.key);
-            return (
-              <tr key={r.key}>
-                <td>{r.key}</td>
-                <td>{money(r.revenue)}</td>
-                <td>{money(r.grossMargin)}</td>
-                <td>{money(r.netMargin)}</td>
-                <td>{percent(r.netMarginPct)}</td>
-                <td><span className={`rag rag-${r.status}`}>{r.status}</span></td>
-                <td>{t ? `${arrow(t.trend)} ${t.netMarginDelta !== undefined ? money(t.netMarginDelta) : ""}`.trim() : "—"}</td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-  );
-}
+function RollupTable({ title, rows, trend }: { title: string; rows: Rollup[]; trend?: TrendRollup[] }) { const trendByKey = new Map((trend ?? []).map((r) => [r.key, r])); return <div className="card"><h3>{title}</h3><table className="ptable"><thead><tr><th>Name</th><th>Revenue</th><th>Gross</th><th>Net</th><th>Net %</th><th>Status</th><th>MoM</th></tr></thead><tbody>{rows.map((r) => { const t = trendByKey.get(r.key); return <tr key={r.key}><td>{r.key}</td><td>{money(r.revenue)}</td><td>{money(r.grossMargin)}</td><td>{money(r.netMargin)}</td><td>{percent(r.netMarginPct)}</td><td><span className={`rag rag-${r.status}`}>{r.status}</span></td><td>{t ? `${arrow(t.trend)} ${t.netMarginDelta !== undefined ? money(t.netMarginDelta) : ""}`.trim() : "—"}</td></tr>; })}</tbody></table></div>; }
 
 export default async function ProfitabilityPage() {
-  const reports = await loadReports();
+  const [reports, apSpend] = await Promise.all([loadReports(), loadApSpend()]);
   const latest = reports[0];
   const summary = latest?.summary as ExecutiveSummary | undefined;
   const detail = latest?.detail as { report: ProfitabilityReport; trend: ReportWithTrend | null } | undefined;
-
-  return (
-    <>
-      <div className="toolbar">
-        <div>
-          <h1>Profitability</h1>
-          <p>Agency P&amp;L by account and service line, with RAG status and month-over-month trend.</p>
-        </div>
-        <span className="status">{reports.length} reports</span>
-      </div>
-
-      <section className="grid">
-        <form className="card" action={addProfitabilityInput}>
-          <h3>Add input</h3>
-          <label>Period<input name="period" defaultValue="2026-06" /></label>
-          <label>Account<input name="account" defaultValue="Acme" /></label>
-          <label>Service line<input name="serviceLine" defaultValue="SEO" /></label>
-          <label>Fee revenue<input name="feeRevenue" type="number" step="0.01" defaultValue="1000" /></label>
-          <label>Labor hours<input name="laborHours" type="number" step="0.01" defaultValue="10" /></label>
-          <label>Labor cost rate<input name="laborCostRate" type="number" step="0.01" defaultValue="30" /></label>
-          <label>Media spend<input name="mediaSpend" type="number" step="0.01" defaultValue="500" /></label>
-          <label>Media markup<input name="mediaMarkupRate" type="number" step="0.01" defaultValue="0.2" /></label>
-          <button type="submit">Add input</button>
-        </form>
-
-        <form className="card" action={generateProfitabilityReport}>
-          <h3>Generate report</h3>
-          <label>Period<input name="period" defaultValue="2026-06" /></label>
-          <label>Prior period (optional)<input name="priorPeriod" placeholder="2026-05" /></label>
-          <label>Overhead pool<input name="overheadPool" type="number" step="0.01" defaultValue="300" /></label>
-          <label>Overhead basis
-            <select name="overheadBasis" defaultValue="labor"><option value="labor">labor</option><option value="revenue">revenue</option></select>
-          </label>
-          <button type="submit">Generate report</button>
-        </form>
-      </section>
-
-      {summary && detail ? (
-        <>
-          <h2 style={{ marginTop: 28 }}>
-            Latest report — {latest.period}
-            {latest.priorPeriod ? ` (vs ${latest.priorPeriod})` : ""}
-          </h2>
-          <section className="grid">
-            <div className="card"><div className="metric">{money(summary.total.revenue)}</div><span>Revenue</span></div>
-            <div className="card"><div className="metric">{money(summary.total.grossMargin)}</div><span>Gross margin</span></div>
-            <div className="card"><div className="metric">{money(summary.total.netMargin)}</div><span>Net margin ({percent(summary.total.netMarginPct)})</span></div>
-            <div className="card">
-              <div className="metric"><span className={`rag rag-${summary.total.status}`}>{summary.total.status}</span></div>
-              <span>
-                Accounts: {summary.accountStatusCounts.green}🟢 {summary.accountStatusCounts.yellow}🟡 {summary.accountStatusCounts.red}🔴
-              </span>
-            </div>
-          </section>
-          <section className="grid" style={{ marginTop: 14 }}>
-            <RollupTable title="By account" rows={detail.report.byAccount} trend={detail.trend?.byAccount} />
-            <RollupTable title="By service line" rows={detail.report.byServiceLine} trend={detail.trend?.byServiceLine} />
-          </section>
-        </>
-      ) : (
-        <div className="card" style={{ marginTop: 20 }}>No reports yet. Add a few inputs for a period, then Generate report.</div>
-      )}
-    </>
-  );
+  const vendorById = new Map(apSpend.vendors.map((vendor) => [vendor.id, vendor]));
+  const spend = new Map<string, { name: string; count: number; spend: number; currency: string }>();
+  for (const invoice of apSpend.invoices) { const name = invoice.vendorId ? vendorById.get(invoice.vendorId)?.name ?? invoice.vendorName ?? "Unlinked vendor" : invoice.vendorName ?? "Unlinked vendor"; const key = `${name} · ${invoice.currency}`; const current = spend.get(key) ?? { name, count: 0, spend: 0, currency: invoice.currency }; spend.set(key, { ...current, count: current.count + 1, spend: current.spend + invoice.total }); }
+  const vendorSpend = [...spend.values()].sort((a, b) => b.spend - a.spend);
+  return <>
+    <div className="toolbar"><div><p className="eyebrow">Finance / AP intelligence</p><h1>Spend &amp; Margin Analytics</h1><p>Connect AP and vendor spend to account and service-line margin reporting, with RAG status and month-over-month trend.</p></div><span className="status">{reports.length} reports · {apSpend.invoices.length} AP invoices</span></div>
+    <section className="grid"><form className="card" action={addProfitabilityInput}><h3>Add margin input</h3><p style={{ marginTop: 0, color: "#5b6577", fontSize: 13 }}>Allocate revenue, labor, media, and overhead alongside AP spend.</p><label>Period<input name="period" defaultValue="2026-06" /></label><label>Account<input name="account" defaultValue="Acme" /></label><label>Service line<input name="serviceLine" defaultValue="SEO" /></label><label>Fee revenue<input name="feeRevenue" type="number" step="0.01" defaultValue="1000" /></label><label>Labor hours<input name="laborHours" type="number" step="0.01" defaultValue="10" /></label><label>Labor cost rate<input name="laborCostRate" type="number" step="0.01" defaultValue="30" /></label><label>Media spend<input name="mediaSpend" type="number" step="0.01" defaultValue="500" /></label><label>Media markup<input name="mediaMarkupRate" type="number" step="0.01" defaultValue="0.2" /></label><button type="submit">Add input</button></form><form className="card" action={generateProfitabilityReport}><h3>Generate report</h3><label>Period<input name="period" defaultValue="2026-06" /></label><label>Prior period (optional)<input name="priorPeriod" placeholder="2026-05" /></label><label>Overhead pool<input name="overheadPool" type="number" step="0.01" defaultValue="300" /></label><label>Overhead basis<select name="overheadBasis" defaultValue="labor"><option value="labor">labor</option><option value="revenue">revenue</option></select></label><button type="submit">Generate report</button></form></section>
+    <section className="control-panel" style={{ marginTop: 18 }}><div className="section-heading"><div><p className="eyebrow">AP spend context</p><h2>Vendor spend in the current invoice inbox</h2></div><span className="muted">{apSpend.invoices.length} invoices · tenant scoped</span></div>{apSpend.invoices.length === 0 ? <p className="muted">No invoices are available yet. Create AP invoices in the inbox to connect vendor spend to this view.</p> : <div className="table-wrap"><table className="review-table"><thead><tr><th>Vendor</th><th>Invoices</th><th>AP spend</th><th>Signal</th></tr></thead><tbody>{vendorSpend.map((row) => <tr key={`${row.name}-${row.currency}`}><td><strong>{row.name}</strong><small>{row.currency}</small></td><td>{row.count}</td><td><strong>{row.currency} {money(row.spend)}</strong></td><td><span className="queue-status queue-closed">Available for margin context</span></td></tr>)}</tbody></table></div>}</section>
+    {summary && detail ? <><h2 style={{ marginTop: 28 }}>Latest report — {latest.period}{latest.priorPeriod ? ` (vs ${latest.priorPeriod})` : ""}</h2><section className="grid"><div className="card"><div className="metric">{money(summary.total.revenue)}</div><span>Revenue</span></div><div className="card"><div className="metric">{money(summary.total.grossMargin)}</div><span>Gross margin</span></div><div className="card"><div className="metric">{money(summary.total.netMargin)}</div><span>Net margin ({percent(summary.total.netMarginPct)})</span></div><div className="card"><div className="metric"><span className={`rag rag-${summary.total.status}`}>{summary.total.status}</span></div><span>Accounts: {summary.accountStatusCounts.green} green · {summary.accountStatusCounts.yellow} yellow · {summary.accountStatusCounts.red} red</span></div></section><section className="grid" style={{ marginTop: 14 }}><RollupTable title="By account" rows={detail.report.byAccount} trend={detail.trend?.byAccount} /><RollupTable title="By service line" rows={detail.report.byServiceLine} trend={detail.trend?.byServiceLine} /></section></> : <div className="card" style={{ marginTop: 20 }}>No margin reports yet. Add inputs for a period, then generate a report.</div>}
+  </>;
 }

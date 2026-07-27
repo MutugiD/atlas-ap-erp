@@ -1,6 +1,6 @@
-# Profitability Engine (`@atlas/profitability`)
+# Spend & Margin Engine (`@atlas/profitability`)
 
-A pure, deterministic, cents-based agency P&L engine (mirrors `@atlas/accounting`) so results **tie out to the
+A pure, deterministic, cents-based margin engine (mirrors `@atlas/accounting`) so results **tie out to the
 dollar** against a hand-closed P&L. No I/O and no external systems — it takes normalized inputs and returns a
 report. Persistence and the period-close report artifact are separate follow-up PRs.
 

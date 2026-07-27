@@ -4,14 +4,14 @@ Notes captured for later. Everything here is deliberately deferred; the shipped 
 other docs and the merged PRs.
 
 ## Near-term direction (requested)
-- **UI** — an operator/reporting front-end (invoice inbox, exceptions, approvals, and the profitability
+- **UI** — an operator/reporting front-end (invoice inbox, exceptions, approvals, and Spend & Margin Analytics
   report artifact / RAG scorecard). A Next.js `apps/web` shell already exists to build on.
 - **AWS deployment** — the CDK stack (`infra/`) defines the shape (S3, SQS, DLQ, Lambda, RDS, IAM). Still
   needed: deploy to staging, confirm RDS Postgres (+pgvector for the support agent), Redis-compatible service,
   worker/web scaling, secrets rotation, rollback procedure, and (if using live Bedrock) AgentCore IDs. The
   CI/CD already publishes the support-agent image to GHCR.
 
-## Profitability module follow-ups
+## Spend & Margin Analytics follow-ups
 - **Auto-generate at book close** — wire `generateProfitabilityReport` into the accounting-period close
   workflow (#19) so the artifact is produced automatically when a period is closed.
 - **Read-only source connectors** — populate `profitability_inputs` from QuickBooks Online (revenue by
