@@ -9,7 +9,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           <a href="/">Inbox</a>
           <a href="/exceptions">Exceptions</a>
         <a href="/approvals">Approvals</a>
-        <a href="/risk">Risk</a>
+        <a href="/risk">Controls</a>
         <a href="/profitability">Profitability</a>
           <a href="/ops">Ops</a>
         </nav>
