@@ -4,8 +4,8 @@ All `/v1` routes are tenant-scoped by the `withTenant` middleware. Send these he
 
 | Header | Meaning | Default (dev) |
 |---|---|---|
-| `x-tenant-id` | Tenant UUID (RLS scope) | a demo tenant UUID |
-| `x-user-id` | Acting user UUID | a demo user UUID |
+| `x-tenant-id` | Tenant UUID (RLS scope) | a local development tenant UUID |
+| `x-user-id` | Acting user UUID | a local development user UUID |
 | `x-user-role` | `ap_clerk` \| `approver` \| `admin` | `ap_clerk` |
 
 Bodies are JSON and validated with Zod; unknown/invalid fields are rejected. An invalid request body or a
@@ -88,6 +88,20 @@ writes no journal.
 | POST | `/v1/profitability/reports` | same body as `/compute` | Generate + **persist** a report artifact (executive summary + full detail) for the period. |
 | GET | `/v1/profitability/reports` | — | List persisted report artifacts. |
 | GET | `/v1/profitability/reports/:id` | — | Fetch one report artifact (summary + detail). |
+
+## Control Review
+
+Risk analytics are optional invoice-to-pay controls. They create explainable review findings and never declare
+an invoice fraudulent or bypass accounting controls.
+
+| Method | Path | Body / query | Purpose |
+|---|---|---|---|
+| POST | `/v1/invoices/:id/risk-assessment` | — | Assess an invoice using the deterministic rules engine. |
+| GET | `/v1/risk-findings` | — | List tenant-scoped invoice control assessments. |
+| GET | `/v1/invoices/:id/risk-findings` | — | List control assessments for one invoice. |
+| POST | `/v1/risk-findings/:id/review` | `{ status: confirmed_issue \| false_positive \| accepted_exception }` | Record a human disposition and audit metadata. |
+| POST | `/v1/risk-reports` | — | Generate a tenant-scoped JSON/CSV-compatible report. |
+| GET | `/v1/risk-reports?format=csv` | — | Download the report as Excel-compatible CSV. |
 
 ## Payments, reconciliation & accounting calculators
 

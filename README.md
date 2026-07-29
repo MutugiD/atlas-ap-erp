@@ -1,15 +1,15 @@
 # atlas-ap-erp
 
-Atlas AP ERP is an open-source, end-to-end, multi-tenant invoice-to-pay ERP platform with deterministic accounting controls, agentic processing, spend and margin analytics, bank reconciliation, and optional invoice risk analytics. It implements the architecture described in `docs/implementation-session.md`: Bun, Hono, Next.js, Drizzle/Postgres RLS, AWS deployment seams, deterministic local agents, and testable API/UI/domain behavior.
+Atlas AP ERP is an open-source, multi-tenant invoice-to-pay ERP platform for controlled AP operations. It combines deterministic accounting controls, agentic invoice processing, bank reconciliation, Spend & Margin Analytics, and optional invoice risk controls. The platform is built with Bun, Hono, Next.js, Drizzle/Postgres RLS, and AWS deployment seams.
 
 ## What Ships
 
 - `apps/api`: Hono API with tenant-scoped invoice, vendor master, purchase order, goods receipt, three-way match, accounting period, credit memo, event, exception, approval, reprocess, and webhook routes. Full `/v1` reference: `docs/api.md`.
-- `apps/web`: Next.js App Router UI for inbox, invoice detail, exceptions, approvals, and ops metrics.
+- `apps/web`: Next.js App Router UI for the invoice inbox, exceptions, approvals, Control Review, Spend & Margin Analytics, invoice detail, and operations metrics.
 - `apps/support-agent`: Fastify Support Agent V2 API with native memory, belief revision, auth seams, queue seams, metrics, and admin shell.
 - `packages/contracts`: Zod contracts shared by API, agents, DB, web, and Lambda.
 - `packages/accounting`: deterministic AP accounting controls for data entry, PO matching, posting, payment runs, and bank reconciliation.
-- `packages/risk`: tenant-scoped, explainable invoice risk assessment with deterministic rules, review workflow, and CSV reporting.
+- `packages/risk`: tenant-scoped, explainable invoice risk assessment with deterministic rules, review workflow, rule/model metadata, and CSV reporting. Findings are review signals, never automatic fraud determinations.
 - `packages/profitability`: deterministic spend and margin engine — gross → delivery (after labor) → overhead → net margin by account and service line, with AP/vendor spend context, media pass-through markup, RAG status, and month-over-month trend. See `docs/profitability.md`.
 - `packages/agents`: deterministic local supervisor plus Bedrock adapter seam.
 - `packages/db`: Drizzle schema and a handwritten RLS migration reviewed for `ENABLE ROW LEVEL SECURITY`.
@@ -17,6 +17,19 @@ Atlas AP ERP is an open-source, end-to-end, multi-tenant invoice-to-pay ERP plat
 - `infra`: AWS CDK stack for S3, SQS, Lambda, RDS, IAM, and Bedrock/AgentCore configuration placeholders.
 - `ops`: Grafana dashboard and Prometheus alert rules for Support Agent V2.
 - `tests`: unit, integration, UI, Lambda, Bedrock adapter, infrastructure, release-gate, and load-smoke checks.
+
+## Product capabilities
+
+Atlas AP ERP covers the controlled invoice-to-pay lifecycle:
+
+`receive → extract → validate → three-way match → control review → GL coding → approval → posting → payment → reconciliation`
+
+- **AP operations:** vendor master, purchase orders, goods receipts, invoice validation, exceptions, approvals, posting, payment runs, and bank reconciliation.
+- **Control Review:** duplicate, arithmetic, vendor, PO, receipt, currency, amount, and payment-hold signals with human review and audit metadata.
+- **Spend & Margin Analytics:** tenant-scoped AP/vendor spend context alongside account and service-line margin reporting, RAG status, and month-over-month trends.
+- **Agentic processing:** deterministic local execution by default, with Ollama and Bedrock adapter seams for configured deployments.
+
+Accounting controls remain authoritative. Optional risk analytics can increase review requirements, but cannot bypass matching, approval, posting, payment, or reconciliation controls.
 
 ## Local Setup
 
@@ -56,13 +69,13 @@ bun.cmd run dev:support
 
 For local UI testing **no database is required** — with `DATABASE_URL` unset the API uses the in-memory
 repository. Start `dev:api` (http://localhost:3001) and `dev:web` (http://localhost:3000), then open
-`/profitability`: add a few margin inputs for a period, click **Generate report**, and review the AP/vendor spend context alongside the RAG scorecard (by account
-and service line, with month-over-month trend) renders. The web app talks to the API at `API_BASE_URL`
+`/profitability`: open Spend & Margin Analytics to review AP/vendor spend context alongside the RAG scorecard by account
+and service line, with month-over-month trend. The web app talks to the API at `API_BASE_URL`
 (default `http://localhost:3001`).
 
-For invoice risk review, open `/risk`, assess an invoice from its detail page, inspect the triggered controls,
-review the finding, and export the tenant-scoped CSV report. Risk findings are review signals and do not by
-themselves determine fraud or bypass accounting controls. See `docs/fraud-risk.md`.
+For invoice control review, open `/risk`, assess an invoice from its detail page, inspect the triggered controls,
+record a human disposition, and export the tenant-scoped CSV report. Risk findings are review signals and do not
+determine fraud or bypass accounting controls. See `docs/fraud-risk.md`.
 
 Default tenant headers for API calls:
 

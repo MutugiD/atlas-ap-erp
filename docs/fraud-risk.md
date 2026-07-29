@@ -1,18 +1,16 @@
-# Invoice Risk Controls
+# Invoice Control Review
 
-Atlas AP ERP provides optional, tenant-scoped risk analytics for invoice-to-pay workflows. The feature is an
-accounting control and review aid; it is not an automated fraud determination, audit opinion, or replacement for
-human investigation.
+Atlas AP ERP provides optional, tenant-scoped invoice controls for the invoice-to-pay workflow. The feature is
+an accounting review aid, not an automated fraud determination, audit opinion, or replacement for investigation.
 
 ## Workflow
 
 ```text
-receive → extract → validate → three-way match → risk assessment → approval → posting → payment → reconciliation
+receive -> extract -> validate -> three-way match -> control review -> approval -> posting -> payment -> reconciliation
 ```
 
-Risk assessment is available through `POST /v1/invoices/:id/risk-assessment` and runs automatically after
-`POST /v1/invoices/:id/reprocess`. Findings are also available through `/v1/risk-findings` and the `/risk` web
-page.
+Assessment is available through `POST /v1/invoices/:id/risk-assessment` and runs automatically after
+`POST /v1/invoices/:id/reprocess`. Findings are available through `/v1/risk-findings` and the `/risk` web page.
 
 ## Deterministic controls
 
@@ -32,7 +30,8 @@ and review state. A high score creates a review finding; it does not automatical
 ## Review and export
 
 Reviewers can mark a finding as `confirmed_issue`, `false_positive`, or `accepted_exception`. The decision is
-tenant-scoped and records the acting user and review time.
+tenant-scoped and records the acting user and review time. The Control Review page shows invoice, vendor, amount,
+payment-control context, queue status, and the leading explanation together.
 
 Reports are available as JSON or Excel-compatible CSV:
 
